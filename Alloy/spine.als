@@ -1,8 +1,8 @@
-//action defs 
+// ----------------- ACTION DEFS -----------------
 
 abstract sig Action {}
 
-// Main flow actions
+-- Main flow actions
 one sig ProtectHeadAndSpine extends Action {}
 one sig CheckCSM_Initial extends Action {}
 one sig BeamLiftOrLogRoll extends Action {}
@@ -10,86 +10,68 @@ one sig MaintainHeadStabilization extends Action {}
 one sig CheckCSM_Recheck extends Action {}
 one sig Evacuate extends Action {}
 
-// CSM sub-actions
+-- CSM sub-actions
 abstract sig CSM_Step extends Action {}
-
 one sig CirculatoryCheck extends CSM_Step {}
 one sig SensationCheck extends CSM_Step {}
 one sig MotorCheck extends CSM_Step {}
 one sig StrokeGripCheck extends CSM_Step {}
 
+-- ----------------- DEPENDENCIES -----------------
 
-sig State {
-    action: one Action,
-    nextState: lone State
+sig Dependency {
+    state: one Action,
+    requires: set Action
 }
 
-fact MainFlow {
-    all s: State |
-        s.action = ProtectHeadAndSpine implies
-            s.nextState.action = CheckCSM_Initial
-
-    all s: State |
-        s.action = CheckCSM_Initial implies
-            s.nextState.action = CirculatoryCheck
-
-    all s: State |
-        s.action = StrokeGripCheck and
-        some start: State |
-            start.action = CheckCSM_Initial and
-            s in start.^nextState
-        implies
-            s.nextState.action = BeamLiftOrLogRoll
-
-    all s: State |
-        s.action = BeamLiftOrLogRoll implies
-            s.nextState.action = MaintainHeadStabilization
-
-    all s: State |
-        s.action = MaintainHeadStabilization implies
-            s.nextState.action = CheckCSM_Recheck
-
-    all s: State |
-        s.action = CheckCSM_Recheck implies
-            s.nextState.action = CirculatoryCheck
-
-    all s: State |
-        s.action = StrokeGripCheck and
-        some start: State |
-            start.action = CheckCSM_Recheck and
-            s in start.^nextState
-        implies
-            s.nextState.action = Evacuate
+fact Dependencies {
+    some d: Dependency | d.state = CheckCSM_Initial and d.requires = ProtectHeadAndSpine
+    some d: Dependency | d.state = CirculatoryCheck and d.requires = CheckCSM_Initial
+    some d: Dependency | d.state = SensationCheck and d.requires = CirculatoryCheck
+    some d: Dependency | d.state = MotorCheck and d.requires = SensationCheck
+    some d: Dependency | d.state = StrokeGripCheck and d.requires = MotorCheck
+    some d: Dependency | d.state = BeamLiftOrLogRoll and d.requires = StrokeGripCheck + CirculatoryCheck + SensationCheck
+    some d: Dependency | d.state = MaintainHeadStabilization and d.requires = BeamLiftOrLogRoll
+    some d: Dependency | d.state = CheckCSM_Recheck and d.requires = MaintainHeadStabilization
+    some d: Dependency | d.state = Evacuate and d.requires = StrokeGripCheck + CheckCSM_Recheck
 }
 
+-- ----------------- PATIENT PARTIAL STATUS -----------------
 
-// CSM orders
-
-fact CSMFlow {
-    all s: State |
-        s.action = CirculatoryCheck implies
-            s.nextState.action = SensationCheck
-
-    all s: State |
-        s.action = SensationCheck implies
-            s.nextState.action = MotorCheck
-
-    all s: State |
-        s.action = MotorCheck implies
-            s.nextState.action = StrokeGripCheck
-
-}
-// evacuation step
-
-fact EvacuationIsFinal {
-    all s: State |
-        s.action = Evacuate implies no s.nextState
+sig PatientStatus {
+    done: set Action
 }
 
-fact NoCycles {
-    no s: State | s in s.^nextState
+one sig P extends PatientStatus {}
+
+-- Example scenario:
+-- Patient has head/spine protected and motor check passed (change/add to this 
+-- to see how NextActionToDo changes.
+fact PatientScenario {
+    P.done = ProtectHeadAndSpine  + StrokeGripCheck + BeamLiftOrLogRoll
 }
 
-// execution
+-- ----------------- NEXT ACTION PREDICATE -----------------
 
-run {} for 15 State
+//pred NextActionToDo[a: Action] {
+//    a not in P.done
+//    and all d: Dependency | d.state = a implies d.requires in P.a
+//}
+
+pred NextActionToDo[a: Action] {
+    a not in P.done
+    and some d: Dependency | d.state = a
+    and all d: Dependency |
+        d.state = a implies d.requires in P.done
+}
+
+-- Next actions set
+one sig NextSteps {
+    actions: set Action
+}
+
+-- ----------------- QUERY -----------------
+
+-- Find all next required actions based on dependencies
+run { some a: Action | NextActionToDo[a] } for 
+    10 Action, 10 Dependency, 1 PatientStatus
