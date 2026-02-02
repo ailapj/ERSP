@@ -1,69 +1,107 @@
 // Basic types representing person condition and age category
+
 abstract sig Person {}
-one sig Infant, Child, Adult extends Person {}
+one sig Infant, NonInfant extends Person {}
 
-// Observations/signs that define choking severity
-sig Sign {}
-one sig CanCough, CanTalk, CannotBreathe, CannotSpeak extends Sign {}
+abstract sig Airway {}
+one sig Partial, Complete extends Airway {}
 
-// Rescue actions
+abstract sig Consciousness {}
+one sig Conscious, Unconscious extends Consciousness {}
+
+abstract sig Ability {}
+one sig CanCoughOrTalk, CannotCoughOrTalk extends Ability {}
+
 abstract sig Action {}
-one sig BackBlows, AbdominalThrusts, ChestThrusts, CPR, CallEmergency extends Action {}
+one sig
+    EncourageCoughing,
+    BackBlows,
+    AbdominalThrusts,
+    ChestThrusts,
+    CPR,
+    CallEmergency
+extends Action
 
-// Choking state: whether obstruction is partial or complete
-enum Obstruction { Partial, Complete }
 
-// Context of a choking incident
 sig Incident {
     person: Person,
-    signs: set Sign,
-    obstruction: Obstruction,
+    airway: Airway,
+    consciousness: Consciousness,
+    ability: Ability,
     actions: set Action
 }
 
-// Safety rule: If someone can cough or talk forcefully,
-// do not apply first aid — let them clear airway.
-fact letnAllowFirstAidIfCoughOrTalk =
-    all inc: Incident |
-        (CanCough in inc.signs or CanTalk in inc.signs) implies
-            (BackBlows not in inc.actions and AbdominalThrusts not in inc.actions)
+fact ChokingControlFlow {
 
-// If the obstruction is complete and the person cannot breathe or speak,
-// first aid should be applied or emergency help should be called.
-fact triageCompleteChoking {
-    all inc: Incident |
-        inc.obstruction = Complete and (CannotBreathe in inc.signs or CannotSpeak in inc.signs) implies
-            (CallEmergency in inc.actions or BackBlows in inc.actions or AbdominalThrusts in inc.actions or ChestThrusts in inc.actions)
+    all i: Incident | {
+
+        /*************************************************
+         * CASE 1: PARTIAL AIRWAY OBSTRUCTION
+         * Premise:
+         *   - Person can cough or talk
+         * Decision:
+         *   - Do not intervene
+         * Outcome:
+         *   - Encourage coughing only
+         *************************************************/
+        (i.airway = Partial and i.ability = CanCoughOrTalk) implies
+            i.actions = EncourageCoughing
+
+
+        /*************************************************
+         * CASE 2: COMPLETE OBSTRUCTION + CONSCIOUS INFANT
+         * Premise:
+         *   - Airway completely blocked
+         *   - Infant (<1 year)
+         *   - Conscious
+         * Decision:
+         *   - Back blows + chest thrusts
+         * Outcome:
+         *   - No abdominal thrusts
+         *************************************************/
+        (i.airway = Complete and
+         i.consciousness = Conscious and
+         i.person = Infant) implies
+            (BackBlows in i.actions and
+             ChestThrusts in i.actions and
+             AbdominalThrusts not in i.actions)
+
+
+        /*************************************************
+         * CASE 3: COMPLETE OBSTRUCTION + CONSCIOUS NON-INFANT
+         * Premise:
+         *   - Airway completely blocked
+         *   - Child or adult
+         *   - Conscious
+         * Decision:
+         *   - Back blows + abdominal thrusts
+         *************************************************/
+        (i.airway = Complete and
+         i.consciousness = Conscious and
+         i.person = NonInfant) implies
+            (BackBlows in i.actions and
+             AbdominalThrusts in i.actions)
+
+
+        /*************************************************
+         * CASE 4: UNCONSCIOUS PERSON
+         * Premise:
+         *   - Person becomes unconscious
+         * Decision:
+         *   - Begin CPR
+         *************************************************/
+        (i.consciousness = Unconscious) implies
+            CPR in i.actions
+
+
+        /*************************************************
+         * CASE 5: COMPLETE OBSTRUCTION → CALL EMERGENCY
+         * Premise:
+         *   - Severe choking
+         * Decision:
+         *   - Emergency services must be contacted
+         *************************************************/
+        (i.airway = Complete) implies
+            CallEmergency in i.actions
+    }
 }
-
-// Infants require modified sequence: back blows then chest thrusts
-fact infantFirstAid {
-    all inc: Incident |
-        inc.person = Infant and inc.obstruction = Complete implies
-            (BackBlows in inc.actions and ChestThrusts in inc.actions)
-}
-
-// Adults and older children: sequence of back blows and abdominal thrusts
-fact adultChildFirstAid {
-    all inc: Incident |
-        (inc.person = Adult or inc.person = Child) and inc.obstruction = Complete implies
-            (BackBlows in inc.actions and AbdominalThrusts in inc.actions)
-}
-
-// Unconscious leads to CPR
-fact unconsciousCPR {
-    all inc: Incident |
-        inc.obstruction = Complete and cannot (CannotBreathe in inc.signs) and
-        not (CanCough in inc.signs or CanTalk in inc.signs) implies
-            CPR in inc.actions
-}
-
-// If alone and choking, emergency call and self-thrusts
-pred selfHelp (inc: Incident) {
-    inc.obstruction = Complete and
-    (CannotBreathe in inc.signs or CannotSpeak in inc.signs) implies
-        (CallEmergency in inc.actions and AbdominalThrusts in inc.actions)
-}
-
-// Example run specification
-run triageCompleteChoking for 5
