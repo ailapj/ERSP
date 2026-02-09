@@ -1,169 +1,71 @@
-// ============================================
-// Drowning Emergency Response - CHECKPOINT VERSION
-// Strictly encodes ONLY constraints from scenario text
-// Based on CDC Guidelines and AHA 2024 CPR Guidelines
-// ============================================
+module ResuscitationProtocols
+//THIS FILE IS FOR CPR AND BREATHING SITUATION(SAFETY PROTOCAL) AND VERIFICATION OF BAD LLM-GENERTED CASE
+// ---------------------------------------------------------
+// 1. DEFINITION 
+// ---------------------------------------------------------
 
-// ============================================
-// SCENARIO CONTROL FLOW
-// ============================================
-// Premise: Child may be in water, supervision may/may not exist
-// Decision: Is there supervision? Is child drowning? Is there intervention?
-// Outcome: Child safe OR child drowns (depending on intervention)
-//
-// Key Rule (ONLY hard constraint from text):
-// - If supervision exists AND child drowning → rescue MUST occur
-// ============================================
+enum Status { Present, Absent }
+enum Action { DoFullCPR, DoRescueBreathingOnly, DoNothing }
 
-// ============================================
-// PART 1: ENTITY DEFINITIONS
-// ============================================
+sig Victim {
+    actualPulse: one Status,  // actual pulse status
+    breathing: one Status     // breathing status
+} 
 
-abstract sig Person {}
-sig Child extends Person {}
-sig Adult extends Person {}
-
-abstract sig WaterLocation {}
-sig Pool extends WaterLocation {}
-sig NaturalWater extends WaterLocation {}
-
-// Supervision relationship
-sig Supervision {
-  supervisor: one Adult,
-  child: one Child
+sig Rescuer {
+    target: one Victim,
+    perceivedPulse: one Status, // rescuer percieve their might have pulse
+    action: one Action          // taking action: CPR or breathing only
 }
 
-// Rescue intervention
-sig Rescue {
-  rescuer: one Adult,
-  victim: one Child
+// ---------------------------------------------------------
+// 2. GROUND FACT
+// ---------------------------------------------------------
+
+fact RealityCheck {
+    // no breathing
+    all v: Victim | v.breathing = Absent
 }
 
-// Drowning incident
-sig Drowning {
-  child: one Child
+// ---------------------------------------------------------
+// 3. Predicates
+// ---------------------------------------------------------
+
+// Bad Protocol) ---
+// depending on Rescuer, if they think victims have pulse, then breathing only or CPR+breathing
+pred followBadProtocol[r: Rescuer] {
+    // rescuer think there is pulse: doing breathing
+    r.perceivedPulse = Present implies r.action = DoRescueBreathingOnly
+    
+    // rescuer think there is not pulse, doing cpr
+    r.perceivedPulse = Absent implies r.action = DoFullCPR
 }
 
-// ============================================
-// PART 2: BASIC STRUCTURAL CONSTRAINTS
-// ============================================
-// These ensure well-formedness, not scenario rules
-
-fact BasicWellFormedness {
-  // Supervision connects one adult to one child
-  all s: Supervision | 
-    s.supervisor in Adult and s.child in Child
-
-  // Rescue is adult saving child
-  all r: Rescue | 
-    r.rescuer in Adult and r.victim in Child
-
-  // Drowning only affects children
-  all d: Drowning | 
-    d.child in Child
+// Godd protocal:
+// No matter there is pulse, just do cpr
+pred followGoodProtocol[r: Rescuer] {
+    r.target.breathing = Absent implies r.action = DoFullCPR
 }
 
-// ============================================
-// PART 3: CORE SCENARIO RULES
-// ============================================
-// ONLY encode constraints explicitly in text
+// ---------------------------------------------------------
+// 4. Safety Condition
+// ---------------------------------------------------------
 
-// RULE 1: Supervised drowning requires intervention
-// This is the ONLY mandatory causal rule from the scenario
-fact SupervisionImpliesRescue {
-  all c: Child |
-    // If child has supervision
-    (some s: Supervision | s.child = c)
-    and
-    // AND child is drowning
-    (some d: Drowning | d.child = c)
-    implies
-    // THEN rescue must occur
-    (some r: Rescue | r.victim = c)
+// fore rescuer r, if victims having cardiac arrest, must do cpr to be safe
+pred VictimIsSafe[r: Rescuer] {
+    (r.target.actualPulse = Absent) implies (r.action = DoFullCPR)
 }
 
-// ============================================
-// PART 4: HAND-WRITTEN GENERATED PLAN
-// ============================================
-// This is a simple, manually constructed instance
-// representing one possible execution path
+// ---------------------------------------------------------
+// 5. Verification
+// ---------------------------------------------------------
 
-one sig Alice extends Child {}
-one sig Bob extends Adult {}
-one sig LocalPool extends Pool {}
-
-one sig SupervisionInstance extends Supervision {} {
-  supervisor = Bob
-  child = Alice
+assert CheckBadProtocol {
+    all r: Rescuer | followBadProtocol[r] implies VictimIsSafe[r]
 }
+check CheckBadProtocol for 3
 
-one sig DrowningIncident extends Drowning {} {
-  child = Alice
+assert CheckGoodProtocol {
+    all r: Rescuer | followGoodProtocol[r] implies VictimIsSafe[r]
 }
-
-one sig RescueAction extends Rescue {} {
-  rescuer = Bob
-  victim = Alice
-}
-
-// This plan represents:
-// Premise: Alice in water at pool
-// Decision: Supervision exists + Drowning occurs
-// Outcome: Rescue happens → LEGAL (satisfies SupervisionImpliesRescue)
-
-// ============================================
-// PART 5: CONSISTENCY CHECKS
-// ============================================
-
-// ASSERTION 1: Verify our core rule
-// Supervised drowning without rescue is FORBIDDEN
-assert NoSupervisedDrowningWithoutRescue {
-  all c: Child |
-    (some s: Supervision | s.child = c)
-    and (some d: Drowning | d.child = c)
-    implies
-    (some r: Rescue | r.victim = c)
-}
-
-// ASSERTION 2: Verify we're not over-constraining
-// Unsupervised drowning without rescue is ALLOWED
-assert UnsupervisedDrowningIsAllowed {
-  some c: Child |
-    (no s: Supervision | s.child = c)
-    and (some d: Drowning | d.child = c)
-    and (no r: Rescue | r.victim = c)
-}
-
-// ASSERTION 3: Verify drowning is not mandatory
-// Scenarios without any drowning should be allowed
-assert NoDrowningIsAllowed {
-  some c: Child |
-    (no d: Drowning | d.child = c)
-}
-
-// ASSERTION 4: Verify rescue can happen without supervision
-// (Text doesn't forbid bystander intervention)
-assert UnsupervisedRescueIsAllowed {
-  some c: Child |
-    (no s: Supervision | s.child = c)
-    and (some d: Drowning | d.child = c)
-    and (some r: Rescue | r.victim = c)
-}
-
-// ============================================
-// PART 6: RUN COMMANDS
-// ============================================
-
-// Check if our hand-written plan is consistent
-run {} for 5
-
-// Verify our assertions
-check NoSupervisedDrowningWithoutRescue for 5
-check UnsupervisedDrowningIsAllowed for 5
-check NoDrowningIsAllowed for 5
-check UnsupervisedRescueIsAllowed for 5
-
-// ============================================
-// CHECKPOINT COMPLIANCE SUMMARY
-// ============================================
-
+check CheckGoodProtocol for 3
