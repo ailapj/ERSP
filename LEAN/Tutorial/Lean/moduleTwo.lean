@@ -105,35 +105,72 @@ inductive BodyPart where
   | feet
   | abdomen
   | head
+  | tongue
+  | lips
+  | skin
+  | palms
 deriving DecidableEq, Repr
 
 inductive Emotion where
   | crying
   | smiling
+  | agony  --capturing the pain/agony or restlessness
 deriving DecidableEq, Repr
 
 inductive Pulse
-| normal
-| weakFast
-| weakSlow
-| absent
+  | normal
+  | weakFast
+  | weakSlow
+  | absent
 deriving DecidableEq, Repr
+
+inductive Color
+  | normal
+  | blue
+  | purple
+  | pale
+deriving DecidableEq, Repr
+
+inductive Breathing
+  | nonexistent
+  | slow
+  | normal
+  | fast
+  | veryFast
+deriving DecidableEq, Repr
+
+inductive BodyState
+  | normal
+  | wasting -- look rapidly at arms, legs, chest to assess wasting (marasmus)
+  | burn -- even those that look well can deteriorate rapidly
+deriving DecidableEq, Repr
+
+structure PhysicalExam where
+  lips : Option Color
+  tongue : Option Color
+  palms : Option Color
+  bodyState: Option (List BodyState) := none
+  oedema: Option (List BodyPart) := none
+  fracture:  Option Bool := none
+  headInjury: Option Bool := none
+  acuateAbdominalPain: Option Bool := none
+deriving DecidableEq, Repr
+
 
 /-- Patient information -/
 structure Patient where
   ageInMonth : Option Nat := none -- number in months
-
-  breathing : Option Bool := none
+  -- color of body, state of the body, swelling
+  exam: PhysicalExam
+  breathing : Option Breathing := none
   airwayObstructed :  Option Bool := none   -- can be caused by blockage by the tongue, foreign body, swelling around the upper airway or severe croup
-  centralCyanosis :  Option Bool := none  -- A bluish discoloration of the mucous membranes, lips, and tongue
 
-  -- determine emotion of the child
+  -- crying, smiling, agony?
   emotion : Option Emotion := none
 
   severeChestIndrawing :  Option Bool := none
   accessoryMuscleUseBreating :  Option Bool := none
   unableToTalkEatFeed :  Option Bool := none
-  veryFastBreathing :  Option Bool := none
   breatingIsTiring :  Option Bool := none
 
   capillaryRefill :  Option Nat := none -- time in seconds for blood to return to the capillaries after pressure is applied
@@ -142,22 +179,25 @@ structure Patient where
   avpu : Option AVPU := none
 
   sunkenEyes :  Option Bool := none
-  skinTurgor : Option SpeedMeasurement := none -- pull on skin and measure how quickly it returns to normal position. Slow return indicates dehydration.
+  skinTurgor : Option Nat := none -- pull on skin and measure how quickly it returns to normal position. Slow return indicates dehydration.
 
   temperature :  Option Temperature := none
-  fracture:  Option Bool := none
-  headInjury:  Option Bool := none
-  acuateAbdominalPain :  Option Bool := none
-  whitePalm :  Option Bool := none -- measure paleness (sign of anaemia)
-
-  poison : Option Bool := none-- hisotry of wallowing druggs ot other dangerous substances (ask guardian)
-  agony :  Option Bool := none -- capturing the pain/agony or restlessness
+  poison : Option Bool := none-- hisotry of swallowing druggs ot other dangerous substances (ask guardian)
 
   urgentReferral :  Option Bool := none
-  wasting : Option Bool := none -- look rapidly at arms, legs, chest o assess wasting (marasmus)
-  oedema : Option (List BodyPart) -- to determine malnutrition (kwashiorkor)
-  burn :  Option Bool := none -- even those that look well can deteriorate rapidly
 deriving DecidableEq, Repr
+
+def hasCyanosis (p : Patient) : Option Bool :=
+  optionOrList [
+    optionEq (p.exam.lips) Color.blue,
+    optionEq (p.exam.lips) Color.purple,
+    optionEq (p.exam.tongue) Color.blue,
+    optionEq (p.exam.tongue) Color.purple,
+  ]
+
+
+def hasPalmarPallor (p : Patient) : Option Bool :=
+  optionEq (p.exam.lips) Color.pale
 
 /-- Determining severe respiratory distress -/
 def SevereRespiratoryDistress (p : Patient) : Option Bool :=
@@ -166,7 +206,7 @@ def SevereRespiratoryDistress (p : Patient) : Option Bool :=
     p.severeChestIndrawing,
     p.accessoryMuscleUseBreating,
     optionAndList [
-      p.veryFastBreathing,
+      optionEq p.breathing Breathing.veryFast,
       p.breatingIsTiring]
   ]
 
@@ -178,20 +218,20 @@ def CirculationProblems (p : Patient) : Option Bool :=
   ]
 
 /-- A in ABCD, an indication for emergency triage-/
-def Airway (p : Patient) : Option Bool :=
+def AirwayABCD (p : Patient) : Option Bool :=
   optionOrList [
-    optionEq p.breathing false,
+    optionEq p.breathing Breathing.nonexistent,
     p.airwayObstructed,
-    p.centralCyanosis
+    hasCyanosis p
   ]
 
 /-- B in ABCD, an indication for emergency triage-/
-def Breathing (p : Patient) : Option Bool :=
+def BreathingABCD (p : Patient) : Option Bool :=
   SevereRespiratoryDistress p
 
 
 /-- C in ABCD, an indication for emergency triage-/
-def CirculationComaConulsion (p : Patient) : Option Bool :=
+def CirculationComaConulsionABCD (p : Patient) : Option Bool :=
   optionOrList [
     CirculationProblems p, -- any circulation problems
     optionEq p.avpu AVPU.Unresponsive, -- in coma
@@ -200,18 +240,18 @@ def CirculationComaConulsion (p : Patient) : Option Bool :=
 
 
 /-- D in ABCD, an indication for emergency triage-/
-def Dehydration (p : Patient) : Option Bool :=
+def DehydrationABCD (p : Patient) : Option Bool :=
   optionOrList [
     p.sunkenEyes,
-    optionEq p.skinTurgor SpeedMeasurement.slow
+    optionGt p.skinTurgor 2
   ]
 
 def Emergency (p : Patient) : Option Bool :=
   optionOrList [
-    Airway p,
-    Breathing p,
-    CirculationComaConulsion p,
-    Dehydration p
+    AirwayABCD p,
+    BreathingABCD p,
+    CirculationComaConulsionABCD p,
+    DehydrationABCD p
   ]
 
 def Priority (p : Patient) : Option Bool :=
@@ -220,20 +260,20 @@ def Priority (p : Patient) : Option Bool :=
     optionLt p.ageInMonth 2,   -- Tiny Baby ( < 2 months)
     optionEq p.temperature Temperature.highFever, -- Temperature = child is very hot
     -- Trauma or other urgent surgical condition
-    p.fracture,
-    p.headInjury,
-    p.acuateAbdominalPain,
-    p.whitePalm,  -- Pallor (severe)
+    p.exam.fracture,
+    p.exam.headInjury,
+    p.exam.acuateAbdominalPain,
+    hasPalmarPallor p,  -- Pallor (severe)
     p.poison, -- Poisoning
-    p.agony, -- Pain (severe)
+    optionEq p.emotion Emotion.agony, -- Pain (severe)
     SevereRespiratoryDistress p, -- respirator distress
     p.breatingIsTiring,
-    p.veryFastBreathing,
+    optionEq p.breathing Breathing.veryFast,
     optionEq p.avpu AVPU.Verbal,  -- Restless, continously irritable, or lethargic
     p.urgentReferral, -- Referral (urgent)
-    p.wasting, -- Malnutrition: Visible severe wasting
-    optionContains p.oedema BodyPart.feet, -- Oedema of both feet
-    p.burn -- burns
+    optionContains (p.exam.bodyState) (BodyState.wasting), -- Malnutrition: Visible severe wasting
+    optionContains p.exam.oedema BodyPart.feet, -- Oedema of both feet
+    optionContains p.exam.bodyState BodyState.burn -- burns
   ]
 
 

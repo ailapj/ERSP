@@ -1,0 +1,1252 @@
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Ms. Jones is unresponsive/unconscious. We need to check pulse first.
+-- No pulse information has been provided yet, so pulse is none.
+-- No rhythm information provided yet.
+
+def msJones : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none  -- not yet assessed
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+  latestEvent := none
+}
+
+def currentState : ArrestState := ArrestState.InitialAssessment
+
+-- Get the next actions and reminders
+#eval ACLSOutput currentState msJones
+-- Expected output: actions = [CheckPulse], reminders = ["Check pulse and breathing for 5-10 seconds"]
+```
+
+============================================================
+
+Based on the verified Lean program, here is what we know and what needs to happen next:
+
+## Current Situation
+
+Ms. Jones is unresponsive. We are in the **Initial Assessment** phase.
+
+## Next Action
+
+**Check for a pulse** (and breathing) for **5–10 seconds**.
+
+This is the critical next step before any other interventions can be determined. We need to know whether Ms. Jones has a pulse or not, as this will dictate the entire course of action going forward.
+
+---
+
+**Can you check for a pulse and breathing and let me know what you find?** Specifically:
+
+1. Does she have a pulse?
+2. Is she breathing normally?
+
+This information will determine whether we proceed with cardiac arrest protocols or a different pathway.
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Ms. Jones is unresponsive/unconscious.
+-- User has confirmed: no pulse detected.
+
+def msJones : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none  -- will be updated via event
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+  latestEvent := none
+}
+
+def currentState : ArrestState := ArrestState.InitialAssessment
+
+-- Step 1: User reports no pulse detected. Apply NoPulseDetected event.
+-- updateState InitialAssessment patient NoPulseDetected => (InitialAssessment, {pulse := some Pulse.Absent, ...})
+def step1 := updateState currentState msJones Event.NoPulseDetected
+def stateAfterNoPulse : ArrestState := step1.1
+def msJonesAfterNoPulse : ArrestPatient := step1.2
+
+-- Verify the state is InitialAssessment and pulse is Absent
+#eval stateAfterNoPulse
+-- Expected: ArrestState.InitialAssessment
+
+#eval msJonesAfterNoPulse.pulse
+-- Expected: some Pulse.Absent
+
+-- Get the next actions and reminders from InitialAssessment with pulse = Absent
+#eval ACLSOutput stateAfterNoPulse msJonesAfterNoPulse
+-- Expected: actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+```
+
+============================================================
+
+Based on the verified Lean program, here is what we know and the next steps:
+
+## Confirmed Status
+
+- **Ms. Jones has no pulse** (Pulse: Absent)
+- We remain in the **Initial Assessment** phase
+
+## Next Action
+
+**Start high-quality CPR immediately.**
+
+Key CPR reminders:
+- **Push hard and fast** — rate of 100–120 compressions per minute
+- **Allow full chest recoil** between compressions
+- **Minimize interruptions** in compressions
+
+---
+
+**Follow-up question:** Has a monitor/defibrillator been attached yet? We need to identify her cardiac rhythm as soon as possible, as the rhythm will determine whether she needs a shock or other interventions.
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Ms. Jones is unresponsive/unconscious.
+-- User has confirmed: no pulse detected.
+-- User has started CPR and attached defibrillator pads (and called code blue).
+
+def msJones : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+  latestEvent := none
+}
+
+def currentState : ArrestState := ArrestState.InitialAssessment
+
+-- Step 1: User reports no pulse detected.
+def step1 := updateState currentState msJones Event.NoPulseDetected
+def stateAfterNoPulse : ArrestState := step1.1
+def msJonesAfterNoPulse : ArrestPatient := step1.2
+
+#eval stateAfterNoPulse
+-- ArrestState.InitialAssessment
+
+#eval msJonesAfterNoPulse.pulse
+-- some (Pulse.Absent)
+
+#eval ACLSOutput stateAfterNoPulse msJonesAfterNoPulse
+-- actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+
+-- Step 2: User starts CPR. This transitions from InitialAssessment to InitialACLS.
+def step2 := updateState stateAfterNoPulse msJonesAfterNoPulse Event.CPRStarted
+def stateAfterCPRStarted : ArrestState := step2.1
+def msJonesAfterCPRStarted : ArrestPatient := step2.2
+
+#eval stateAfterCPRStarted
+-- ArrestState.InitialACLS
+
+-- Step 3: User attached defibrillator pads.
+def step3 := updateState stateAfterCPRStarted msJonesAfterCPRStarted Event.DefibrillatorAttached
+def stateAfterDefib : ArrestState := step3.1
+def msJonesAfterDefib : ArrestPatient := step3.2
+
+#eval stateAfterDefib
+-- ArrestState.InitialACLS
+
+#eval msJonesAfterDefib.defibrillatorAttached
+-- true
+
+-- Step 4: Code blue called implies monitor is also being attached (pads serve as monitor).
+def step4 := updateState stateAfterDefib msJonesAfterDefib Event.MonitorAttached
+def stateAfterMonitor : ArrestState := step4.1
+def msJonesAfterMonitor : ArrestPatient := step4.2
+
+#eval stateAfterMonitor
+-- ArrestState.InitialACLS
+
+#eval msJonesAfterMonitor.monitorAttached
+-- true
+
+-- Get the next actions and reminders from InitialACLS
+#eval ACLSOutput stateAfterMonitor msJonesAfterMonitor
+-- actions = [GiveOxygen, AttachMonitor, AttachDefibrillator, ObtainIVIO]
+-- reminders include CPR quality reminders
+```
+
+============================================================
+
+## Great work so far!
+
+Here's what has been completed:
+- ✅ **No pulse confirmed** — cardiac arrest
+- ✅ **CPR started**
+- ✅ **Code blue called**
+- ✅ **Defibrillator pads attached**
+- ✅ **Monitor attached** (pads serving as monitor)
+
+## Current State: **Initial ACLS**
+
+Based on the verified program, here are the **next actions**:
+
+1. **Give oxygen**
+2. **Obtain IV or IO access** (vascular access)
+
+## Reminders
+- Continue **high-quality CPR** — push hard and fast (100–120/min), allow full chest recoil, minimize interruptions
+
+---
+
+**Critical follow-up question:** **What rhythm is showing on the monitor?**
+
+We need to identify the cardiac rhythm to determine the next steps — specifically whether this is a **shockable rhythm** (ventricular fibrillation or pulseless ventricular tachycardia) or a **non-shockable rhythm** (asystole or pulseless electrical activity). This will determine the entire treatment pathway going forward.
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Ms. Jones is unresponsive/unconscious.
+-- User has confirmed: no pulse detected.
+-- User has started CPR and attached defibrillator pads (and called code blue).
+-- User reports a shockable rhythm on the monitor.
+
+def msJones : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+  latestEvent := none
+}
+
+def currentState : ArrestState := ArrestState.InitialAssessment
+
+-- Step 1: User reports no pulse detected.
+def step1 := updateState currentState msJones Event.NoPulseDetected
+def stateAfterNoPulse : ArrestState := step1.1
+def msJonesAfterNoPulse : ArrestPatient := step1.2
+
+#eval stateAfterNoPulse
+-- ArrestState.InitialAssessment
+
+#eval msJonesAfterNoPulse.pulse
+-- some (Pulse.Absent)
+
+#eval ACLSOutput stateAfterNoPulse msJonesAfterNoPulse
+-- actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+
+-- Step 2: User starts CPR. This transitions from InitialAssessment to InitialACLS.
+def step2 := updateState stateAfterNoPulse msJonesAfterNoPulse Event.CPRStarted
+def stateAfterCPRStarted : ArrestState := step2.1
+def msJonesAfterCPRStarted : ArrestPatient := step2.2
+
+#eval stateAfterCPRStarted
+-- ArrestState.InitialACLS
+
+-- Step 3: User attached defibrillator pads.
+def step3 := updateState stateAfterCPRStarted msJonesAfterCPRStarted Event.DefibrillatorAttached
+def stateAfterDefib : ArrestState := step3.1
+def msJonesAfterDefib : ArrestPatient := step3.2
+
+#eval stateAfterDefib
+-- ArrestState.InitialACLS
+
+#eval msJonesAfterDefib.defibrillatorAttached
+-- true
+
+-- Step 4: Code blue called implies monitor is also being attached (pads serve as monitor).
+def step4 := updateState stateAfterDefib msJonesAfterDefib Event.MonitorAttached
+def stateAfterMonitor : ArrestState := step4.1
+def msJonesAfterMonitor : ArrestPatient := step4.2
+
+#eval stateAfterMonitor
+-- ArrestState.InitialACLS
+
+#eval msJonesAfterMonitor.monitorAttached
+-- true
+
+-- Get the next actions and reminders from InitialACLS
+#eval ACLSOutput stateAfterMonitor msJonesAfterMonitor
+-- actions = [GiveOxygen, AttachMonitor, AttachDefibrillator, ObtainIVIO]
+-- reminders include CPR quality reminders
+
+-- Step 5: User reports a shockable rhythm. Using VentricularFibrillation as the
+-- specific shockable rhythm (user said "shockable rhythm" without specifying VF vs pVT;
+-- VentricularFibrillation is used as the representative shockable rhythm).
+def step5 := updateState stateAfterMonitor msJonesAfterMonitor (Event.RhythmObserved Rhythm.VentricularFibrillation)
+def stateAfterRhythm : ArrestState := step5.1
+def msJonesAfterRhythm : ArrestPatient := step5.2
+
+#eval stateAfterRhythm
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterRhythm.rhythm
+-- some (Rhythm.VentricularFibrillation)
+
+-- Get the next actions and reminders from RhythmAnalysis with a shockable rhythm
+#eval ACLSOutput stateAfterRhythm msJonesAfterRhythm
+-- actions = [DeliverShock], reminders = ["Resume CPR immediately after shock"]
+```
+
+============================================================
+
+## Current Status
+
+- ✅ No pulse — cardiac arrest confirmed
+- ✅ CPR in progress
+- ✅ Code blue called
+- ✅ Defibrillator pads and monitor attached
+- ✅ **Shockable rhythm identified** (Ventricular Fibrillation)
+
+We are now in the **Rhythm Analysis** phase.
+
+## Next Action
+
+**Deliver a shock NOW.**
+
+## Reminder
+
+- **Resume CPR immediately after the shock** — do not delay compressions after defibrillation.
+
+---
+
+**Assumption:** I'm treating the shockable rhythm as **ventricular fibrillation (VF)**, since you didn't specify whether it's VF or pulseless ventricular tachycardia (pVT). Both are shockable rhythms and the immediate next step is the same.
+
+**Follow-up:** Go ahead and deliver the shock. Let me know once it's been delivered so we can proceed with the next steps.
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Ms. Jones is unresponsive/unconscious.
+-- User has confirmed: no pulse detected.
+-- User has started CPR and attached defibrillator pads (and called code blue).
+-- User reports a shockable rhythm on the monitor.
+-- User has delivered a shock. About 1 minute has passed.
+
+def msJones : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+  latestEvent := none
+}
+
+def currentState : ArrestState := ArrestState.InitialAssessment
+
+-- Step 1: User reports no pulse detected.
+def step1 := updateState currentState msJones Event.NoPulseDetected
+def stateAfterNoPulse : ArrestState := step1.1
+def msJonesAfterNoPulse : ArrestPatient := step1.2
+
+#eval stateAfterNoPulse
+-- ArrestState.InitialAssessment
+
+#eval msJonesAfterNoPulse.pulse
+-- some (Pulse.Absent)
+
+#eval ACLSOutput stateAfterNoPulse msJonesAfterNoPulse
+-- actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+
+-- Step 2: User starts CPR. This transitions from InitialAssessment to InitialACLS.
+def step2 := updateState stateAfterNoPulse msJonesAfterNoPulse Event.CPRStarted
+def stateAfterCPRStarted : ArrestState := step2.1
+def msJonesAfterCPRStarted : ArrestPatient := step2.2
+
+#eval stateAfterCPRStarted
+-- ArrestState.InitialACLS
+
+-- Step 3: User attached defibrillator pads.
+def step3 := updateState stateAfterCPRStarted msJonesAfterCPRStarted Event.DefibrillatorAttached
+def stateAfterDefib : ArrestState := step3.1
+def msJonesAfterDefib : ArrestPatient := step3.2
+
+#eval stateAfterDefib
+-- ArrestState.InitialACLS
+
+#eval msJonesAfterDefib.defibrillatorAttached
+-- true
+
+-- Step 4: Code blue called implies monitor is also being attached (pads serve as monitor).
+def step4 := updateState stateAfterDefib msJonesAfterDefib Event.MonitorAttached
+def stateAfterMonitor : ArrestState := step4.1
+def msJonesAfterMonitor : ArrestPatient := step4.2
+
+#eval stateAfterMonitor
+-- ArrestState.InitialACLS
+
+#eval msJonesAfterMonitor.monitorAttached
+-- true
+
+-- Get the next actions and reminders from InitialACLS
+#eval ACLSOutput stateAfterMonitor msJonesAfterMonitor
+-- actions = [GiveOxygen, AttachMonitor, AttachDefibrillator, ObtainIVIO]
+-- reminders include CPR quality reminders
+
+-- Step 5: User reports a shockable rhythm. Using VentricularFibrillation as the
+-- specific shockable rhythm (user said "shockable rhythm" without specifying VF vs pVT;
+-- VentricularFibrillation is used as the representative shockable rhythm).
+def step5 := updateState stateAfterMonitor msJonesAfterMonitor (Event.RhythmObserved Rhythm.VentricularFibrillation)
+def stateAfterRhythm : ArrestState := step5.1
+def msJonesAfterRhythm : ArrestPatient := step5.2
+
+#eval stateAfterRhythm
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterRhythm.rhythm
+-- some (Rhythm.VentricularFibrillation)
+
+-- Get the next actions and reminders from RhythmAnalysis with a shockable rhythm
+#eval ACLSOutput stateAfterRhythm msJonesAfterRhythm
+-- actions = [DeliverShock], reminders = ["Resume CPR immediately after shock"]
+
+-- Step 6: User has delivered the shock. shockCount goes from 0 to 1. State transitions to CPR.
+def step6 := updateState stateAfterRhythm msJonesAfterRhythm Event.ShockDelivered
+def stateAfterShock : ArrestState := step6.1
+def msJonesAfterShock : ArrestPatient := step6.2
+
+#eval stateAfterShock
+-- ArrestState.CPR
+
+#eval msJonesAfterShock.shockCount
+-- 1
+
+-- Get the next actions and reminders from CPR state after first shock.
+-- shockCount = 1, so no epinephrine yet (need shockCount >= 2 and even),
+-- no antiarrhythmic yet (need shockCount >= 3 and odd).
+-- Rhythm is known (VF) so no AnalyzeRhythm action needed.
+#eval ACLSOutput stateAfterShock msJonesAfterShock
+-- actions = [StartHighQualityCPR, PlaceAdvancedAirway, UseCapnography]
+-- reminders include CPR quality reminders and "Next rhythm analysis when CPR timer expires"
+```
+
+============================================================
+
+## Current Status
+
+- ✅ No pulse — cardiac arrest confirmed
+- ✅ Code blue called
+- ✅ Defibrillator pads and monitor attached
+- ✅ Shockable rhythm (VF) identified
+- ✅ **First shock delivered** (shock count: 1)
+- ⏱️ About 1 minute has passed since the shock
+
+## Current State: **CPR**
+
+You should be doing CPR right now. Based on the verified program, here are the next actions and reminders:
+
+### Next Actions
+
+1. **Continue high-quality CPR** — you should be performing 2 minutes of CPR after the shock
+2. **Place an advanced airway** (e.g., endotracheal tube or supraglottic airway)
+3. **Use capnography** (waveform capnography to confirm airway placement and monitor CPR quality)
+
+### Reminders
+- Maintain CPR quality: **100–120 compressions/min**, full chest recoil, minimize interruptions
+- **Next rhythm analysis should occur when the CPR timer expires** (after the full 2-minute CPR cycle)
+
+### What's NOT needed yet
+- **Epinephrine** is not indicated yet — per the program, it's needed after shock count ≥ 2
+- **Antiarrhythmic (amiodarone or lidocaine)** is not indicated yet — per the program, it's needed after shock count ≥ 3
+
+---
+
+**Follow-up questions:**
+
+1. **Do you have IV or IO access established yet?** (This wasn't confirmed and will be needed for medications soon.)
+2. Let me know when the 2-minute CPR cycle is complete so we can proceed to the next rhythm analysis.
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Ms. Jones is unresponsive/unconscious.
+-- User has confirmed: no pulse detected.
+-- User has started CPR and attached defibrillator pads (and called code blue).
+-- User reports a shockable rhythm on the monitor.
+-- User has delivered a shock. About 1 minute has passed.
+-- User now reports asystole — they say "we have asystole we have gotten a rhythm"
+-- This means the rhythm check after CPR shows asystole (a non-shockable rhythm).
+
+def msJones : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+  latestEvent := none
+}
+
+def currentState : ArrestState := ArrestState.InitialAssessment
+
+-- Step 1: User reports no pulse detected.
+def step1 := updateState currentState msJones Event.NoPulseDetected
+def stateAfterNoPulse : ArrestState := step1.1
+def msJonesAfterNoPulse : ArrestPatient := step1.2
+
+#eval stateAfterNoPulse
+-- ArrestState.InitialAssessment
+
+#eval msJonesAfterNoPulse.pulse
+-- some (Pulse.Absent)
+
+#eval ACLSOutput stateAfterNoPulse msJonesAfterNoPulse
+-- actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+
+-- Step 2: User starts CPR. This transitions from InitialAssessment to InitialACLS.
+def step2 := updateState stateAfterNoPulse msJonesAfterNoPulse Event.CPRStarted
+def stateAfterCPRStarted : ArrestState := step2.1
+def msJonesAfterCPRStarted : ArrestPatient := step2.2
+
+#eval stateAfterCPRStarted
+-- ArrestState.InitialACLS
+
+-- Step 3: User attached defibrillator pads.
+def step3 := updateState stateAfterCPRStarted msJonesAfterCPRStarted Event.DefibrillatorAttached
+def stateAfterDefib : ArrestState := step3.1
+def msJonesAfterDefib : ArrestPatient := step3.2
+
+#eval stateAfterDefib
+-- ArrestState.InitialACLS
+
+#eval msJonesAfterDefib.defibrillatorAttached
+-- true
+
+-- Step 4: Code blue called implies monitor is also being attached (pads serve as monitor).
+def step4 := updateState stateAfterDefib msJonesAfterDefib Event.MonitorAttached
+def stateAfterMonitor : ArrestState := step4.1
+def msJonesAfterMonitor : ArrestPatient := step4.2
+
+#eval stateAfterMonitor
+-- ArrestState.InitialACLS
+
+#eval msJonesAfterMonitor.monitorAttached
+-- true
+
+-- Get the next actions and reminders from InitialACLS
+#eval ACLSOutput stateAfterMonitor msJonesAfterMonitor
+-- actions = [GiveOxygen, AttachMonitor, AttachDefibrillator, ObtainIVIO]
+-- reminders include CPR quality reminders
+
+-- Step 5: User reports a shockable rhythm. Using VentricularFibrillation as the
+-- specific shockable rhythm (user said "shockable rhythm" without specifying VF vs pVT;
+-- VentricularFibrillation is used as the representative shockable rhythm).
+def step5 := updateState stateAfterMonitor msJonesAfterMonitor (Event.RhythmObserved Rhythm.VentricularFibrillation)
+def stateAfterRhythm : ArrestState := step5.1
+def msJonesAfterRhythm : ArrestPatient := step5.2
+
+#eval stateAfterRhythm
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterRhythm.rhythm
+-- some (Rhythm.VentricularFibrillation)
+
+-- Get the next actions and reminders from RhythmAnalysis with a shockable rhythm
+#eval ACLSOutput stateAfterRhythm msJonesAfterRhythm
+-- actions = [DeliverShock], reminders = ["Resume CPR immediately after shock"]
+
+-- Step 6: User has delivered the shock. shockCount goes from 0 to 1. State transitions to CPR.
+def step6 := updateState stateAfterRhythm msJonesAfterRhythm Event.ShockDelivered
+def stateAfterShock : ArrestState := step6.1
+def msJonesAfterShock : ArrestPatient := step6.2
+
+#eval stateAfterShock
+-- ArrestState.CPR
+
+#eval msJonesAfterShock.shockCount
+-- 1
+
+-- Get the next actions and reminders from CPR state after first shock.
+#eval ACLSOutput stateAfterShock msJonesAfterShock
+-- actions = [StartHighQualityCPR, PlaceAdvancedAirway, UseCapnography]
+-- reminders include CPR quality reminders and "Next rhythm analysis when CPR timer expires"
+
+-- Step 7: CPR cycle completed (user has been doing CPR, now checking rhythm).
+-- cprCycle goes from 0 to 1. State transitions to RhythmAnalysis.
+def step7 := updateState stateAfterShock msJonesAfterShock Event.CPRDone
+def stateAfterCPRDone : ArrestState := step7.1
+def msJonesAfterCPRDone : ArrestPatient := step7.2
+
+#eval stateAfterCPRDone
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterCPRDone.cprCycle
+-- 1
+
+-- Step 8: User reports asystole on rhythm check. This is a non-shockable rhythm.
+-- The rhythm has changed from VF to Asystole.
+def step8 := updateState stateAfterCPRDone msJonesAfterCPRDone (Event.RhythmObserved Rhythm.Asystole)
+def stateAfterAsystole : ArrestState := step8.1
+def msJonesAfterAsystole : ArrestPatient := step8.2
+
+#eval stateAfterAsystole
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterAsystole.rhythm
+-- some (Rhythm.Asystole)
+
+-- Get the next actions and reminders from RhythmAnalysis with a non-shockable rhythm (Asystole).
+-- Since Asystole is NOT shockable, the protocol says: StartHighQualityCPR + TreatReversibleCauses
+-- Reminder: "Administer epinephrine as early as possible"
+#eval ACLSOutput stateAfterAsystole msJonesAfterAsystole
+-- actions = [StartHighQualityCPR, TreatReversibleCauses]
+-- reminders = ["Administer epinephrine as early as possible"]
+```
+
+============================================================
+
+## Current Status
+
+- ✅ First shock was delivered (shock count: 1)
+- ✅ CPR cycle completed
+- ✅ Rhythm check performed
+- ⚠️ **Rhythm is now Asystole** — this is a **non-shockable rhythm**
+
+**Important clarification:** You mentioned "we have gotten a rhythm," but **asystole is NOT a perfusing rhythm** — it means there is no electrical activity in the heart. This is still a cardiac arrest.
+
+## We are in: **Rhythm Analysis**
+
+Since asystole is a **non-shockable rhythm**, here are the next steps:
+
+### Next Actions
+
+1. **Resume high-quality CPR immediately** — do NOT deliver another shock (asystole is non-shockable)
+2. **Treat reversible causes** — consider the **H's and T's**:
+   - **H's:** Hypovolemia, Hypoxia, Hydrogen ion (acidosis), Hypo/Hyperkalemia, Hypothermia
+   - **T's:** Tension pneumothorax, Tamponade (cardiac), Toxins, Thrombosis (pulmonary or coronary)
+
+### Reminder
+
+- **Administer epinephrine as early as possible** — you will need IV or IO access for this
+
+---
+
+**Follow-up questions:**
+
+1. **Do you have IV or IO access yet?** Epinephrine needs to be given as soon as possible.
+2. **Are there any known medical history details for Ms. Jones** that might point to a reversible cause?
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Ms. Jones is unresponsive/unconscious.
+-- User has confirmed: no pulse detected.
+-- User has started CPR and attached defibrillator pads (and called code blue).
+-- User reports a shockable rhythm on the monitor.
+-- User has delivered a shock. About 1 minute has passed.
+-- User now reports asystole — they say "we have asystole we have gotten a rhythm"
+-- This means the rhythm check after CPR shows asystole (a non-shockable rhythm).
+-- User has given 1 mg of epinephrine.
+
+def msJones : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+  latestEvent := none
+}
+
+def currentState : ArrestState := ArrestState.InitialAssessment
+
+-- Step 1: User reports no pulse detected.
+def step1 := updateState currentState msJones Event.NoPulseDetected
+def stateAfterNoPulse : ArrestState := step1.1
+def msJonesAfterNoPulse : ArrestPatient := step1.2
+
+#eval stateAfterNoPulse
+-- ArrestState.InitialAssessment
+
+#eval msJonesAfterNoPulse.pulse
+-- some (Pulse.Absent)
+
+#eval ACLSOutput stateAfterNoPulse msJonesAfterNoPulse
+-- actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+
+-- Step 2: User starts CPR. This transitions from InitialAssessment to InitialACLS.
+def step2 := updateState stateAfterNoPulse msJonesAfterNoPulse Event.CPRStarted
+def stateAfterCPRStarted : ArrestState := step2.1
+def msJonesAfterCPRStarted : ArrestPatient := step2.2
+
+#eval stateAfterCPRStarted
+-- ArrestState.InitialACLS
+
+-- Step 3: User attached defibrillator pads.
+def step3 := updateState stateAfterCPRStarted msJonesAfterCPRStarted Event.DefibrillatorAttached
+def stateAfterDefib : ArrestState := step3.1
+def msJonesAfterDefib : ArrestPatient := step3.2
+
+#eval stateAfterDefib
+-- ArrestState.InitialACLS
+
+#eval msJonesAfterDefib.defibrillatorAttached
+-- true
+
+-- Step 4: Code blue called implies monitor is also being attached (pads serve as monitor).
+def step4 := updateState stateAfterDefib msJonesAfterDefib Event.MonitorAttached
+def stateAfterMonitor : ArrestState := step4.1
+def msJonesAfterMonitor : ArrestPatient := step4.2
+
+#eval stateAfterMonitor
+-- ArrestState.InitialACLS
+
+#eval msJonesAfterMonitor.monitorAttached
+-- true
+
+-- Get the next actions and reminders from InitialACLS
+#eval ACLSOutput stateAfterMonitor msJonesAfterMonitor
+-- actions = [GiveOxygen, AttachMonitor, AttachDefibrillator, ObtainIVIO]
+-- reminders include CPR quality reminders
+
+-- Step 5: User reports a shockable rhythm. Using VentricularFibrillation as the
+-- specific shockable rhythm (user said "shockable rhythm" without specifying VF vs pVT;
+-- VentricularFibrillation is used as the representative shockable rhythm).
+def step5 := updateState stateAfterMonitor msJonesAfterMonitor (Event.RhythmObserved Rhythm.VentricularFibrillation)
+def stateAfterRhythm : ArrestState := step5.1
+def msJonesAfterRhythm : ArrestPatient := step5.2
+
+#eval stateAfterRhythm
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterRhythm.rhythm
+-- some (Rhythm.VentricularFibrillation)
+
+-- Get the next actions and reminders from RhythmAnalysis with a shockable rhythm
+#eval ACLSOutput stateAfterRhythm msJonesAfterRhythm
+-- actions = [DeliverShock], reminders = ["Resume CPR immediately after shock"]
+
+-- Step 6: User has delivered the shock. shockCount goes from 0 to 1. State transitions to CPR.
+def step6 := updateState stateAfterRhythm msJonesAfterRhythm Event.ShockDelivered
+def stateAfterShock : ArrestState := step6.1
+def msJonesAfterShock : ArrestPatient := step6.2
+
+#eval stateAfterShock
+-- ArrestState.CPR
+
+#eval msJonesAfterShock.shockCount
+-- 1
+
+-- Get the next actions and reminders from CPR state after first shock.
+#eval ACLSOutput stateAfterShock msJonesAfterShock
+-- actions = [StartHighQualityCPR, PlaceAdvancedAirway, UseCapnography]
+-- reminders include CPR quality reminders and "Next rhythm analysis when CPR timer expires"
+
+-- Step 7: CPR cycle completed (user has been doing CPR, now checking rhythm).
+-- cprCycle goes from 0 to 1. State transitions to RhythmAnalysis.
+def step7 := updateState stateAfterShock msJonesAfterShock Event.CPRDone
+def stateAfterCPRDone : ArrestState := step7.1
+def msJonesAfterCPRDone : ArrestPatient := step7.2
+
+#eval stateAfterCPRDone
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterCPRDone.cprCycle
+-- 1
+
+-- Step 8: User reports asystole on rhythm check. This is a non-shockable rhythm.
+-- The rhythm has changed from VF to Asystole.
+def step8 := updateState stateAfterCPRDone msJonesAfterCPRDone (Event.RhythmObserved Rhythm.Asystole)
+def stateAfterAsystole : ArrestState := step8.1
+def msJonesAfterAsystole : ArrestPatient := step8.2
+
+#eval stateAfterAsystole
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterAsystole.rhythm
+-- some (Rhythm.Asystole)
+
+-- Get the next actions and reminders from RhythmAnalysis with a non-shockable rhythm (Asystole).
+-- Since Asystole is NOT shockable, the protocol says: StartHighQualityCPR + TreatReversibleCauses
+-- Reminder: "Administer epinephrine as early as possible"
+#eval ACLSOutput stateAfterAsystole msJonesAfterAsystole
+-- actions = [StartHighQualityCPR, TreatReversibleCauses]
+-- reminders = ["Administer epinephrine as early as possible"]
+
+-- Step 9: User has given 1 mg of epinephrine. This implies IV/IO access has been established.
+-- First, record that IV/IO access is established (user must have access to give epi).
+def step9a := updateState stateAfterAsystole msJonesAfterAsystole Event.IV_IOEstablished
+def stateAfterIVIO : ArrestState := step9a.1
+def msJonesAfterIVIO : ArrestPatient := step9a.2
+
+#eval stateAfterIVIO
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterIVIO.vascularAccess
+-- VascularAccess.IV_IO
+
+-- Now record epinephrine given. epinephrineCount goes from 0 to 1.
+-- Epinephrine timer starts at 240 seconds (4 minutes).
+-- State remains RhythmAnalysis per updateState.
+def step9b := updateState stateAfterIVIO msJonesAfterIVIO Event.EpinephrineGiven
+def stateAfterEpi : ArrestState := step9b.1
+def msJonesAfterEpi : ArrestPatient := step9b.2
+
+#eval stateAfterEpi
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterEpi.epinephrineCount
+-- 1
+
+#eval msJonesAfterEpi.timers.epinephrine
+-- some { remaining := 240 }
+
+#eval msJonesAfterEpi.vascularAccess
+-- VascularAccess.IV_IO
+
+-- Get the next actions and reminders from RhythmAnalysis.
+-- Rhythm is still Asystole (non-shockable), so:
+-- actions = [StartHighQualityCPR, TreatReversibleCauses]
+-- reminders = ["Administer epinephrine as early as possible"]
+-- (Epi has been given; next dose after timer expires in ~4 min)
+#eval ACLSOutput stateAfterEpi msJonesAfterEpi
+-- actions = [StartHighQualityCPR, TreatReversibleCauses]
+-- reminders = ["Administer epinephrine as early as possible"]
+```
+
+============================================================
+
+## Current Status
+
+- ✅ First shock delivered (shock count: 1)
+- ✅ CPR cycle completed
+- ✅ Rhythm check: **Asystole** (non-shockable)
+- ✅ **IV/IO access established** (assumed, since epinephrine was administered)
+- ✅ **1 mg Epinephrine given** (epinephrine count: 1)
+- ⏱️ **Epinephrine timer started: next dose in ~4 minutes** (240 seconds)
+
+## Next Actions
+
+Based on the verified program, the current output is:
+
+1. **Resume high-quality CPR immediately** — 2 minutes of CPR before the next rhythm check
+2. **Treat reversible causes** — actively consider the **H's and T's**:
+   - **H's:** Hypovolemia, Hypoxia, Hydrogen ion (acidosis), Hypo/Hyperkalemia, Hypothermia
+   - **T's:** Tension pneumothorax, Tamponade (cardiac), Toxins, Thrombosis (pulmonary or coronary)
+
+## Reminders
+
+- **Administer epinephrine as early as possible** — next dose will be due when the epinephrine timer expires (~4 minutes from now)
+- Continue **high-quality CPR**: 100–120 compressions/min, full chest recoil, minimize interruptions
+- **Do NOT shock** — asystole is a non-shockable rhythm
+
+---
+
+**Follow-up questions:**
+
+1. **Do you have any information about Ms. Jones's medical history or circumstances** that might help identify a reversible cause (H's and T's)?
+2. **Has an advanced airway been placed yet?** (This was recommended earlier and is still outstanding.)
+
+Let me know when the 2-minute CPR cycle is complete so we can do the next rhythm check.
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Ms. Jones is unresponsive/unconscious.
+-- User has confirmed: no pulse detected.
+-- User has started CPR and attached defibrillator pads (and called code blue).
+-- User reports a shockable rhythm on the monitor.
+-- User has delivered a shock. About 1 minute has passed.
+-- User now reports asystole — they say "we have asystole we have gotten a rhythm"
+-- This means the rhythm check after CPR shows asystole (a non-shockable rhythm).
+-- User has given 1 mg of epinephrine.
+-- User reports: she's not breathing, blood pressure is good.
+-- Not breathing is consistent with cardiac arrest (already known).
+-- Blood pressure being "good" is noted but does not change the arrest state —
+-- the patient still has asystole and no pulse was re-confirmed.
+-- No new events change the state; we are still in RhythmAnalysis with Asystole.
+
+def msJones : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+  latestEvent := none
+}
+
+def currentState : ArrestState := ArrestState.InitialAssessment
+
+-- Step 1: User reports no pulse detected.
+def step1 := updateState currentState msJones Event.NoPulseDetected
+def stateAfterNoPulse : ArrestState := step1.1
+def msJonesAfterNoPulse : ArrestPatient := step1.2
+
+#eval stateAfterNoPulse
+-- ArrestState.InitialAssessment
+
+#eval msJonesAfterNoPulse.pulse
+-- some (Pulse.Absent)
+
+#eval ACLSOutput stateAfterNoPulse msJonesAfterNoPulse
+-- actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+
+-- Step 2: User starts CPR. This transitions from InitialAssessment to InitialACLS.
+def step2 := updateState stateAfterNoPulse msJonesAfterNoPulse Event.CPRStarted
+def stateAfterCPRStarted : ArrestState := step2.1
+def msJonesAfterCPRStarted : ArrestPatient := step2.2
+
+#eval stateAfterCPRStarted
+-- ArrestState.InitialACLS
+
+-- Step 3: User attached defibrillator pads.
+def step3 := updateState stateAfterCPRStarted msJonesAfterCPRStarted Event.DefibrillatorAttached
+def stateAfterDefib : ArrestState := step3.1
+def msJonesAfterDefib : ArrestPatient := step3.2
+
+#eval stateAfterDefib
+-- ArrestState.InitialACLS
+
+#eval msJonesAfterDefib.defibrillatorAttached
+-- true
+
+-- Step 4: Code blue called implies monitor is also being attached (pads serve as monitor).
+def step4 := updateState stateAfterDefib msJonesAfterDefib Event.MonitorAttached
+def stateAfterMonitor : ArrestState := step4.1
+def msJonesAfterMonitor : ArrestPatient := step4.2
+
+#eval stateAfterMonitor
+-- ArrestState.InitialACLS
+
+#eval msJonesAfterMonitor.monitorAttached
+-- true
+
+-- Get the next actions and reminders from InitialACLS
+#eval ACLSOutput stateAfterMonitor msJonesAfterMonitor
+-- actions = [GiveOxygen, AttachMonitor, AttachDefibrillator, ObtainIVIO]
+-- reminders include CPR quality reminders
+
+-- Step 5: User reports a shockable rhythm. Using VentricularFibrillation as the
+-- specific shockable rhythm (user said "shockable rhythm" without specifying VF vs pVT;
+-- VentricularFibrillation is used as the representative shockable rhythm).
+def step5 := updateState stateAfterMonitor msJonesAfterMonitor (Event.RhythmObserved Rhythm.VentricularFibrillation)
+def stateAfterRhythm : ArrestState := step5.1
+def msJonesAfterRhythm : ArrestPatient := step5.2
+
+#eval stateAfterRhythm
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterRhythm.rhythm
+-- some (Rhythm.VentricularFibrillation)
+
+-- Get the next actions and reminders from RhythmAnalysis with a shockable rhythm
+#eval ACLSOutput stateAfterRhythm msJonesAfterRhythm
+-- actions = [DeliverShock], reminders = ["Resume CPR immediately after shock"]
+
+-- Step 6: User has delivered the shock. shockCount goes from 0 to 1. State transitions to CPR.
+def step6 := updateState stateAfterRhythm msJonesAfterRhythm Event.ShockDelivered
+def stateAfterShock : ArrestState := step6.1
+def msJonesAfterShock : ArrestPatient := step6.2
+
+#eval stateAfterShock
+-- ArrestState.CPR
+
+#eval msJonesAfterShock.shockCount
+-- 1
+
+-- Get the next actions and reminders from CPR state after first shock.
+#eval ACLSOutput stateAfterShock msJonesAfterShock
+-- actions = [StartHighQualityCPR, PlaceAdvancedAirway, UseCapnography]
+-- reminders include CPR quality reminders and "Next rhythm analysis when CPR timer expires"
+
+-- Step 7: CPR cycle completed (user has been doing CPR, now checking rhythm).
+-- cprCycle goes from 0 to 1. State transitions to RhythmAnalysis.
+def step7 := updateState stateAfterShock msJonesAfterShock Event.CPRDone
+def stateAfterCPRDone : ArrestState := step7.1
+def msJonesAfterCPRDone : ArrestPatient := step7.2
+
+#eval stateAfterCPRDone
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterCPRDone.cprCycle
+-- 1
+
+-- Step 8: User reports asystole on rhythm check. This is a non-shockable rhythm.
+-- The rhythm has changed from VF to Asystole.
+def step8 := updateState stateAfterCPRDone msJonesAfterCPRDone (Event.RhythmObserved Rhythm.Asystole)
+def stateAfterAsystole : ArrestState := step8.1
+def msJonesAfterAsystole : ArrestPatient := step8.2
+
+#eval stateAfterAsystole
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterAsystole.rhythm
+-- some (Rhythm.Asystole)
+
+-- Get the next actions and reminders from RhythmAnalysis with a non-shockable rhythm (Asystole).
+-- Since Asystole is NOT shockable, the protocol says: StartHighQualityCPR + TreatReversibleCauses
+-- Reminder: "Administer epinephrine as early as possible"
+#eval ACLSOutput stateAfterAsystole msJonesAfterAsystole
+-- actions = [StartHighQualityCPR, TreatReversibleCauses]
+-- reminders = ["Administer epinephrine as early as possible"]
+
+-- Step 9: User has given 1 mg of epinephrine. This implies IV/IO access has been established.
+-- First, record that IV/IO access is established (user must have access to give epi).
+def step9a := updateState stateAfterAsystole msJonesAfterAsystole Event.IV_IOEstablished
+def stateAfterIVIO : ArrestState := step9a.1
+def msJonesAfterIVIO : ArrestPatient := step9a.2
+
+#eval stateAfterIVIO
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterIVIO.vascularAccess
+-- VascularAccess.IV_IO
+
+-- Now record epinephrine given. epinephrineCount goes from 0 to 1.
+-- Epinephrine timer starts at 240 seconds (4 minutes).
+-- State remains RhythmAnalysis per updateState.
+def step9b := updateState stateAfterIVIO msJonesAfterIVIO Event.EpinephrineGiven
+def stateAfterEpi : ArrestState := step9b.1
+def msJonesAfterEpi : ArrestPatient := step9b.2
+
+#eval stateAfterEpi
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterEpi.epinephrineCount
+-- 1
+
+#eval msJonesAfterEpi.timers.epinephrine
+-- some { remaining := 240 }
+
+#eval msJonesAfterEpi.vascularAccess
+-- VascularAccess.IV_IO
+
+-- Get the next actions and reminders from RhythmAnalysis.
+-- Rhythm is still Asystole (non-shockable), so:
+-- actions = [StartHighQualityCPR, TreatReversibleCauses]
+-- reminders = ["Administer epinephrine as early as possible"]
+-- (Epi has been given; next dose after timer expires in ~4 min)
+#eval ACLSOutput stateAfterEpi msJonesAfterEpi
+-- actions = [StartHighQualityCPR, TreatReversibleCauses]
+-- reminders = ["Administer epinephrine as early as possible"]
+
+-- Step 10: User reports "she's not breathing, blood pressure is good."
+-- Not breathing is consistent with the ongoing cardiac arrest (pulse absent, asystole).
+-- Blood pressure being "good" is an observation but does not correspond to a state-changing
+-- event in the ACLS protocol — the patient remains in cardiac arrest with asystole.
+-- The airway is still Basic. The user has not reported placing an advanced airway.
+-- No new Event is triggered that changes the ArrestState or ArrestPatient fields.
+--
+-- The current state remains: RhythmAnalysis with Asystole (non-shockable).
+-- The protocol output remains the same.
+
+-- Verify current state and output remain unchanged:
+#eval stateAfterEpi
+-- ArrestState.RhythmAnalysis
+
+#eval msJonesAfterEpi.rhythm
+-- some (Rhythm.Asystole)
+
+#eval msJonesAfterEpi.airway
+-- Airway.Basic
+
+#eval ACLSOutput stateAfterEpi msJonesAfterEpi
+-- actions = [StartHighQualityCPR, TreatReversibleCauses]
+-- reminders = ["Administer epinephrine as early as possible"]
+```
+
+============================================================
+
+## Current Status
+
+- ✅ First shock delivered (shock count: 1)
+- ✅ Rhythm check: **Asystole** (non-shockable)
+- ✅ IV/IO access established
+- ✅ 1 mg Epinephrine given (next dose due in ~4 minutes)
+- ⚠️ **Airway: Basic** (no advanced airway placed yet)
+- ⚠️ **Patient is not breathing** — consistent with ongoing cardiac arrest
+
+**Regarding blood pressure:** You mentioned blood pressure is good. However, based on the verified program, **Ms. Jones remains in cardiac arrest with asystole and no pulse**. A blood pressure reading does not change the arrest state. 
+
+**Assumption:** I am assuming that no new pulse has been confirmed, and the patient remains in cardiac arrest.
+
+---
+
+## Next Actions (from the verified program)
+
+1. **Resume high-quality CPR immediately** — 2 minutes of CPR before the next rhythm check
+2. **Treat reversible causes** — actively investigate the **H's and T's**:
+   - **H's:** Hypovolemia, Hypoxia, Hydrogen ion (acidosis), Hypo/Hyperkalemia, Hypothermia
+   - **T's:** Tension pneumothorax, Tamponade (cardiac), Toxins, Thrombosis (pulmonary or coronary)
+
+## Reminders
+
+- **Administer epinephrine as early as possible** — next dose due when the epinephrine timer expires (~4 minutes from when the last dose was given)
+- Since **she is not breathing** and the airway is still **basic**, consider **placing an advanced airway** (e.g., endotracheal tube or supraglottic airway) — this was recommended earlier and has not yet been done
+
+---
+
+## Follow-up Questions
+
+1. **Has a pulse been re-checked?** If you're getting a blood pressure reading, it's important to confirm — does she actually have a pulse now, or is asystole still on the monitor?
+2. **Can you place an advanced airway?** She is not breathing and currently only has a basic airway.
+3. **Are there any clues to a reversible cause** (medical history, medications, circumstances of the arrest)?
+
+============================================================
+

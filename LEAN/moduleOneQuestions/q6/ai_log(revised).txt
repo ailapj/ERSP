@@ -1,0 +1,114 @@
+Looking at the Lean specification, the `BodyState` type includes `wasting` with the comment:
+
+```
+| wasting -- look rapidly at arms, legs, chest o assess wasting (marasmus)
+```
+
+So you look at the **arms, legs, and chest** to assess for signs of severe wasting (marasmus).
+
+The user hasn't provided any new patient information, so the Lean state remains unchanged.
+
+```lean
+import Tutorial.Lean.moduleTwo
+
+-- Patient: 2-year-old male, acutely convulsing
+def patient : Patient :=
+  { ageInMonth := some 24          -- two years old = 24 months
+    exam := {
+      lips := none
+      tongue := none
+      palms := none
+      bodyState := none
+      oedema := none
+      fracture := none
+      headInjury := none
+      acuateAbdominalPain := none
+    }
+    breathing := none
+    airwayObstructed := none
+    emotion := none
+    severeChestIndrawing := none
+    accessoryMuscleUseBreating := none
+    unableToTalkEatFeed := none
+    breatingIsTiring := none
+    capillaryRefill := none
+    pulse := none
+    avpu := some AVPU.Pain          -- acutely convulsing: responsive to pain only
+    sunkenEyes := none
+    skinTurgor := none
+    temperature := none
+    poison := none
+    urgentReferral := none
+  }
+
+-- Verify triage result
+#eval TriageAssessment patient
+-- Expected: Triage.Emergency
+-- Because CirculationComaConulsionABCD triggers on avpu = Pain
+
+-- Prove the triage is Emergency
+theorem patient_is_emergency : TriageAssessment patient = Triage.Emergency := by
+  native_decide
+```
+
+============================================================
+
+Looking at the error, the candidate code is malformed - it's just a fragment of a data constructor, not a valid Lean program. I need to create a proper theorem that proves something about the specification's safety.
+
+Let me analyze the specification and create a meaningful safety theorem. A natural safety property is: if a patient has emergency signs, they should be triaged as Emergency (not sent to Queue).
+
+```lean
+import Tutorial.Lean.moduleTwo
+
+-- Safety theorem: A patient with no breathing (airway emergency) is triaged as Emergency
+theorem emergency_no_breathing_safe (p : Patient)
+    (h_breathing : p.breathing = some Breathing.nonexistent)
+    : TriageAssessment p = Triage.Emergency := by
+  unfold TriageAssessment
+  unfold Emergency
+  unfold AirwayABCD
+  simp [optionOrList, optionEq, h_breathing]
+
+-- Safety theorem: A patient who is unresponsive (coma) is triaged as Emergency
+theorem emergency_unresponsive_safe (p : Patient)
+    (h_avpu : p.avpu = some AVPU.Unresponsive)
+    : TriageAssessment p = Triage.Emergency := by
+  unfold TriageAssessment
+  unfold Emergency
+  unfold CirculationComaConulsionABCD
+  unfold AirwayABCD BreathingABCD DehydrationABCD
+  unfold SevereRespiratoryDistress
+  unfold CirculationProblems
+  unfold hasCyanosis
+  simp [optionOrList, optionEq, optionGt, optionAndList, h_avpu]
+
+-- Safety theorem: A tiny baby (age < 2 months) who is not emergency is at least Priority
+theorem priority_tiny_baby_safe (p : Patient)
+    (h_age : p.ageInMonth = some 1)
+    (h_not_emergency : Emergency p = some false)
+    : TriageAssessment p = Triage.Priority := by
+  unfold TriageAssessment
+  simp [h_not_emergency]
+  unfold Priority
+  simp [optionOrList, optionLt, h_age]
+```
+
+============================================================
+
+# Where to Look for Signs of Severe Wasting
+
+Based on the verified Lean program, I can explain what the system checks regarding severe wasting, but the program itself defines the triage logic in terms of patient attributes and triage categories (Emergency, Priority, etc.) rather than specifying physical examination techniques for where on the body to look.
+
+What the verified program **does** establish is:
+
+- **Severe wasting** is one of the patient attributes that factors into triage decisions (it is part of the `Patient` data structure used in the triage assessment).
+- A patient with severe wasting who is not classified as an Emergency would be classified as **Priority** (this is part of the `Priority` function logic).
+
+However, the Lean program does not contain specific clinical examination instructions about **where on the body** to look for signs of severe wasting.
+
+I cannot invent medical facts beyond what is represented in the verified program. 
+
+**Would you like me to help you with a triage assessment for a specific patient instead?** If so, please share the patient's details (age, breathing status, responsiveness, and any other signs or symptoms), and I can walk through the triage logic that has been formally verified.
+
+============================================================
+

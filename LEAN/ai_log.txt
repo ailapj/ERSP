@@ -1,92 +1,571 @@
-Looking at this scenario: A two-year-old male is rushed to the clinic acutely convulsing.
-
-**Medical Analysis:**
-- A convulsing child would be unresponsive or only responsive to pain on the AVPU scale
-- Convulsions indicate a neurological emergency
-- This falls under "C" in ABCD (Circulation, **Coma**, **Convulsion**)
-- A child who is actively convulsing would be assessed as AVPU = Pain or Unresponsive
-
-Since the child is "acutely convulsing," they would be at most responsive to pain (AVPU.Pain), which triggers the `CirculationComaConulsion` check, which feeds into `Emergency`. This should result in **Emergency** triage.
-
-The child is 2 years old = 24 months.
-
-```lean
-import Tutorial.Lean.moduleOneRevised
-
-def examplePatient : Patient :=
-{
-  ageInMonth := some 24,
-  avpu := some AVPU.Pain,
-  breathing := some true,
-  airwayObstructed := some false,
-  centralCyanosis := some false,
-  severeChestIndrawing := some false,
-  accessoryMuscleUseBreating := some false,
-  unableToTalkEatFeed := some false,
-  veryFastBreathing := some false,
-  breatingIsTiring := some false,
-  capillaryRefill := some 2,
-  pulse := some Pulse.normal,
-  sunkenEyes := some false,
-  skinTurgor := some SpeedMeasurement.normal,
-  temperature := some Temperature.normal,
-  fracture := some false,
-  headInjury := some false,
-  acuateAbdominalPain := some false,
-  whitePalm := some false,
-  poison := some false,
-  agony := some false,
-  urgentReferral := some false,
-  wasting := some false,
-  oedema := some [],
-  burn := some false,
-  emotion := some Emotion.crying
-}
-
-theorem ValidPlan :
-  TriageAssessment examplePatient = Triage.Emergency := by
-  native_decide
-```
-
-**Explanation:**
-- The key finding is `avpu := some AVPU.Pain` — a convulsing child is only responsive to pain stimuli
-- `CirculationComaConulsion` checks for `optionEq p.avpu AVPU.Pain`, which returns `some true`
-- This makes `Emergency p` return `some true`
-- Therefore `TriageAssessment` returns `Triage.Emergency`
-- All other fields are filled in with normal/negative values since the scenario only mentions convulsions
-- The proof is completed by `native_decide` which computationally verifies the equality
+[Event.NoPulseDetected]
 
 ============================================================
 
-## Triage Assessment: Two-Year-Old with Acute Convulsions
+**Start high-quality CPR immediately.**
 
-**This child should be triaged as an EMERGENCY.**
+Push hard and fast on the center of the chest — at least 2 inches deep, at a rate of 100–120 compressions per minute. Allow full chest recoil between compressions.
 
-### Explanation
+**Is someone getting the monitor, defibrillator, and IV/IO access set up while CPR is in progress?**
 
-Based on the verified assessment, a two-year-old (24 months) presenting with acute convulsions is classified as **Emergency** triage. Here's why:
+============================================================
 
-The triage system follows the **ABCD** approach:
+[Event.CPRStarted, Event.DefibrillatorAttached]
 
-- **A (Airway):** Clear — the child is breathing, no airway obstruction, no central cyanosis.
-- **B (Breathing):** No severe respiratory distress — no chest indrawing, no accessory muscle use, able to feed, no very fast breathing.
-- **C (Circulation, Coma, Convulsion):** **This is where the emergency is triggered.** A child who is actively convulsing is assessed on the AVPU scale as responsive only to **Pain** (not alert, not responding to verbal stimuli). Under the ABCD protocol, a patient who is only responsive to pain — indicating coma or active convulsion — meets the criteria for emergency triage.
-- **D (Dehydration):** No signs — no sunken eyes, normal skin turgor.
+============================================================
 
-### What This Means
+Good, the defibrillator is attached and compression rate of 110/min is right on target.
 
-Even though the child's airway, breathing, circulation, and hydration status are otherwise stable, the convulsion alone — captured by the AVPU assessment showing the child is only responsive to pain — is sufficient to classify this as an **Emergency** under the "C" (Circulation, Coma, Convulsion) criterion.
+**While CPR continues, we still need to:**
 
-### Immediate Action
+1. **Attach the monitor** — so we can analyze the rhythm
+2. **Get IV or IO access** established for medications
+3. **Give oxygen** to the patient
 
-As an Emergency triage case, this child requires **immediate** assessment and treatment ahead of all Priority and Queue patients. Per emergency protocols, you should:
+**CPR timer is running — continue compressions for the full 2 minutes.**
 
-1. Manage the airway and ensure the child is in a safe position
-2. Administer appropriate anticonvulsant therapy
-3. Assess for underlying causes (e.g., fever/malaria, meningitis, poisoning, head injury)
-4. Continuously monitor vital signs
+Remember: push down at least 5 cm (2 inches), allow full chest recoil, and give breaths with visible chest rise.
 
-**Do not delay treatment** — emergency-triaged patients must receive care without waiting.
+**Is the monitor attached yet, and do you have IV or IO access?**
+
+============================================================
+
+[Event.MonitorAttached]
+
+============================================================
+
+**Monitor and defibrillator are attached — good.**
+
+**Next steps while CPR continues:**
+
+1. **Get IV or IO access** — this is the priority right now so we can give medications when needed
+2. **Give oxygen** — ensure the patient is receiving supplemental oxygen
+
+**CPR timer is still running — keep up those compressions at 110/min, that's great. Allow full chest recoil and make sure breaths produce visible chest rise.**
+
+**Are you able to establish IV or IO access?**
+
+============================================================
+
+[Event.TimerExpired TimerKind.CPR]
+
+============================================================
+
+**CPR timer has expired — it's been 2 minutes.**
+
+**Right now, you need to:**
+
+1. **Analyze the rhythm** — look at the monitor. **What rhythm do you see?** (V-fib, V-tach, asystole, or PEA?)
+2. **Keep working on getting IV or IO access** — we'll need it for epinephrine and other medications
+3. **Continue giving oxygen**
+
+**What does the rhythm look like on the monitor?**
+
+============================================================
+
+[Event.CPRDone, Event.RhythmObserved Rhythm.Asystole]
+
+============================================================
+
+**The rhythm is not shockable (asystole/PEA) — do NOT shock.**
+
+**Immediately:**
+
+1. **Resume high-quality CPR** — start another 2-minute cycle right now. Push hard and fast, 100–120/min, full chest recoil.
+2. **Treat reversible causes** — think through the H's and T's:
+   - **H's:** Hypovolemia, Hypoxia, Hydrogen ion (acidosis), Hypo/Hyperkalemia, Hypothermia
+   - **T's:** Tension pneumothorax, Tamponade (cardiac), Toxins, Thrombosis (pulmonary/coronary)
+
+3. **Administer epinephrine as soon as possible** — 1 mg IV/IO. This is critical for non-shockable rhythms — give it as early as you can.
+
+⚠️ **You still need IV or IO access to give epinephrine. Are you able to establish that now?**
+
+============================================================
+
+[Event.CPRStarted]
+
+============================================================
+
+**Good, CPR is in progress. Timer running for 2 minutes.**
+
+**While compressions continue, you should also:**
+
+1. **Place an advanced airway** — consider an endotracheal tube or supraglottic airway
+2. **Use capnography** — once an advanced airway is in place, use waveform capnography to confirm placement and monitor CPR quality
+
+**Keep compressions going — 100–120/min, at least 5 cm deep, full chest recoil. Change the compressor every 2 minutes to avoid fatigue.**
+
+**Next rhythm analysis will happen when the CPR timer expires.**
+
+⚠️ **You still don't have IV or IO access — we need this urgently to give epinephrine. Are you working on establishing IV or IO?**
+
+============================================================
+
+[Event.CPRDone]
+
+============================================================
+
+**CPR timer expired — 2 minutes are up. Time to analyze the rhythm again.**
+
+**What does the rhythm look like on the monitor now?** Is it still non-shockable (asystole/PEA), or has it changed?
+
+**Key priorities right now:**
+
+1. **Resume high-quality CPR immediately** — start another 2-minute cycle while you assess
+2. **Treat reversible causes** — keep working through the H's and T's. Have you identified any potential reversible cause?
+
+⚠️ **Epinephrine is overdue — you need to administer 1 mg epinephrine as soon as possible.** This is especially critical in non-shockable rhythms.
+
+**You still don't have IV or IO access — this is now urgent. Can you establish IO access? If IV has been difficult, IO is the next step and should not be delayed further.**
+
+============================================================
+
+CONVERSATION 2: 
+
+==============
+
+Looking at the user's latest message: "patient is here and seems to be unconcious"
+
+This describes the patient's general presentation but does not explicitly describe any event from the protocol. The patient being unconscious is an observation, but no specific protocol event (pulse check result, CPR started, equipment attached, etc.) has been performed or reported.
+
+**Output:**
+
+```
+[]
+```
+
+**Questions for user:**
+- Can you check for a pulse and breathing? Is a pulse present or absent?
+
+============================================================
+
+**Next step:** Check the patient's pulse and breathing for **5–10 seconds**.
+
+Is a pulse present?
+
+============================================================
+
+[Event.NoPulseDetected]
+
+============================================================
+
+**No pulse detected — begin CPR immediately.**
+
+Here's what to do right now:
+
+1. **Start high-quality CPR**
+   - Push hard and fast: **100–120 compressions per minute**
+   - Push down **at least 5 cm (2 inches)**
+   - Allow **full chest recoil** between compressions
+   - Give breaths that produce **visible chest rise**
+
+2. **Call for help / activate the code team** if not already done.
+
+While CPR is ongoing, we need to get equipment set up:
+- **Attach a monitor and defibrillator**
+- **Establish IV or IO access**
+- **Give oxygen**
+
+**Is any of this equipment already available or being brought to you?**
+
+============================================================
+
+[Event.NoPulseDetected, Event.CPRStarted]
+
+**Questions for user:**
+- Has the monitor, defibrillator, or IV/IO access been set up yet, or is someone bringing them now?
+
+============================================================
+
+We're currently in the **Initial ACLS** phase — CPR has been started. Since no equipment is available yet, here's what needs to happen **right now, in parallel with ongoing CPR:**
+
+1. **Give oxygen** to the patient
+2. **Attach a cardiac monitor** so we can see the heart's electrical activity
+3. **Attach a defibrillator** so we're ready to shock if needed
+4. **Establish IV or IO access** for medications
+
+**Keep CPR going continuously** while this equipment is being set up:
+- Compression rate: **100–120 per minute**
+- Depth: **at least 5 cm (2 inches)**
+- Allow **full chest recoil**
+- Provide breaths for **visible chest rise**
+
+**Is anyone else available to help get this equipment, or are you alone?** And as soon as any of this equipment is attached, let me know so we can move to the next step — analyzing the heart rhythm.
+
+============================================================
+
+CONVERSATION 3 
+
+==============Looking at the user's latest message: "patient is here and seems to be unconcious"
+
+This describes the patient's general presentation but does not explicitly describe any protocol event. The patient being unconscious is an observation, but no specific action (like checking a pulse, starting CPR, attaching equipment, etc.) has been performed or reported.
+
+**Output:**
+
+1) `[]`
+
+2) **Questions for user:** The protocol recommends checking the patient's pulse and breathing for 5-10 seconds. Have you checked for a pulse? Is a pulse present or absent?
+
+============================================================
+
+**Next Step:** Check the patient's pulse and breathing for **5–10 seconds**.
+
+Feel the carotid pulse and look for signs of normal breathing.
+
+**Does the patient have a pulse?**
+
+============================================================
+
+[Event.NoPulseDetected]
+
+============================================================
+
+**Start high-quality CPR immediately.**
+
+- Push hard and fast on the center of the chest
+- Compression rate: **100–120 per minute**
+- Depth: at least **2 inches (5 cm)**
+- Allow full chest recoil between compressions
+- Minimize interruptions
+
+While CPR is ongoing, your team should also be preparing equipment. **Has the monitor, defibrillator, and IV/IO access been set up yet?**
+
+============================================================
+
+[]
+
+**Questions for user:** Have you started CPR yet?
+
+============================================================
+
+**Start high-quality CPR immediately** if you haven't already.
+
+Once CPR is underway, your team needs to get the following equipment set up as quickly as possible:
+
+- **Attach a monitor** to the patient
+- **Attach a defibrillator**
+- **Establish IV or IO access**
+- **Give oxygen**
+
+**Has CPR been started?**
+
+============================================================
+
+[Event.CPRStarted]
+
+============================================================
+
+**Good, CPR is in progress.** Keep it going for the full 2 minutes.
+
+While CPR continues, your team needs to do the following **right now**:
+
+1. **Give oxygen** to the patient
+2. **Attach a cardiac monitor**
+3. **Attach a defibrillator**
+4. **Establish IV or IO access**
+
+These should be done simultaneously without interrupting chest compressions.
+
+**Reminders:**
+- Compression rate: **100–120/min**
+- Push down at least **5 cm (2 inches)**
+- Allow full chest recoil
+- Give breaths with visible chest rise
+
+**Has the equipment (monitor, defibrillator, IV/IO) been set up yet?**
+
+============================================================
+
+[]
+
+**Questions for user:** The monitor, defibrillator, and IV/IO access still need to be set up. Can you work on getting any of these attached while CPR continues? Which ones are available to you right now?
+
+============================================================
+
+**CPR is in progress — keep going until the 2-minute timer is up.**
+
+While compressions continue, your team needs to get these done **right now**:
+
+1. **Give oxygen** to the patient
+2. **Attach a cardiac monitor**
+3. **Attach a defibrillator**
+4. **Establish IV or IO access**
+
+All of these should happen simultaneously — do **not** stop chest compressions to set them up.
+
+**Reminders:**
+- Compression rate: **100–120/min**
+- Push down at least **5 cm (2 inches)**
+- Allow full chest recoil
+- Give breaths with visible chest rise
+
+**Let me know once the equipment is set up, or when the 2-minute CPR timer goes off — whichever comes first.**
+
+============================================================
+
+Looking at the user's latest message:
+
+1. **"I attached a monitor here"** — This explicitly states the monitor has been attached.
+2. **"but I can't read the rhythm"** — The user is expressing difficulty reading the rhythm, but no rhythm observation is being reported. No new event here.
+
+**Output:**
+
+```
+[Event.MonitorAttached]
+```
+
+**Questions for user:**
+The monitor is attached — that's good. What do you see on the screen? Is there any organized electrical activity, or does it look chaotic/flat? Describing what you see can help identify the rhythm. Also, **has the defibrillator and IV/IO access been set up yet?**
+
+============================================================
+
+**Good, the monitor is attached.** Don't worry about reading the rhythm right now — we'll analyze it when the CPR timer is up.
+
+**Keep CPR going.** Here's what still needs to happen while compressions continue:
+
+1. ✅ Monitor — attached
+2. ❌ **Attach the defibrillator** — get this on the patient now
+3. ❌ **Establish IV or IO access**
+4. ❌ **Give oxygen**
+
+**Reminders:**
+- Compression rate: **100–120/min**
+- Push down at least **5 cm (2 inches)**
+- Allow full chest recoil
+- Give breaths with visible chest rise
+
+**Can you get the defibrillator attached and IV/IO started while CPR continues?**
+
+============================================================
+
+[]
+
+**Questions for user:** The 2-minute CPR timer has expired. It's time to **analyze the rhythm** now. **What rhythm do you see on the monitor?** (e.g., ventricular fibrillation, a flat line/asystole, some electrical activity, etc.)
+
+============================================================
+
+**Good, the monitor is attached.** The CPR timer has expired — **start a new cycle of CPR immediately** and change the compressor if possible.
+
+Here's what still needs to happen **right now**:
+
+1. ✅ Monitor — attached
+2. ❌ **Attach the defibrillator** — this is critical
+3. ❌ **Establish IV or IO access**
+4. ❌ **Give oxygen** to the patient
+
+**Reminders:**
+- Compression rate: **100–120/min**
+- Push down at least **5 cm (2 inches)**
+- Allow full chest recoil
+- Give breaths with visible chest rise
+
+We need to analyze the rhythm, but we need the **defibrillator attached first** to be able to shock if needed.
+
+**Can you get the defibrillator on the patient and establish IV/IO access now?**
+
+============================================================
+
+CONVERSATION 4 
+ 
+==============
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+def user : ArrestState × ArrestPatient :=
+  let s₀ := (ArrestState.InitialAssessment,
+    { rhythm := none
+      pulse := none
+      shockCount := 0
+      cprCycle := 0
+      epinephrineCount := 0
+      amiodaroneOrLidocaineCount := 0
+      monitorAttached := false
+      defibrillatorAttached := false
+      vascularAccess := VascularAccess.None
+      airway := Airway.Basic
+      timers := []
+      latestEvent := none })
+  let s₁ := updateState s₀.1 s₀.2 Event.NoPulseDetected
+  let s₂ := updateState s₁.1 s₁.2 Event.CPRStarted
+  s₂
+
+#eval ACLSOutput user.1 user.2
+```
+
+============================================================
+
+**Right now, do these things:**
+
+1. **Give oxygen**
+2. **Attach the monitor**
+3. **Attach the defibrillator**
+4. **Get IV or IO access**
+
+**While doing that, remember:**
+- Keep doing CPR for 2 minutes
+- Compress at a rate of 100–120 per minute
+- Push down at least 2 inches (5 cm) and let the chest fully recoil
+- Give breaths that make the chest visibly rise
+
+---
+
+**Once you have the monitor and defib on, what rhythm are you seeing?**
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+def user : ArrestState × ArrestPatient :=
+  let s₀ := (ArrestState.InitialAssessment,
+    { rhythm := none
+      pulse := none
+      shockCount := 0
+      cprCycle := 0
+      epinephrineCount := 0
+      amiodaroneOrLidocaineCount := 0
+      monitorAttached := false
+      defibrillatorAttached := false
+      vascularAccess := VascularAccess.None
+      airway := Airway.Basic
+      timers := []
+      latestEvent := none })
+  let s₁ := updateState s₀.1 s₀.2 Event.NoPulseDetected
+  let s₂ := updateState s₁.1 s₁.2 Event.CPRStarted
+  let s₃ := updateState s₂.1 s₂.2 Event.AllEquipmentAttached
+  let s₄ := updateState s₃.1 s₃.2 (Event.RhythmObserved Rhythm.Asystole)
+  s₄
+
+#eval ACLSOutput user.1 user.2
+```
+
+============================================================
+
+**Here's what to do now:**
+
+1. **Start high-quality CPR** — get right back on the chest
+2. **Treat any reversible causes** — think through the H's and T's:
+   - **H's:** Hypovolemia, Hypoxia, Hydrogen ion (acidosis), Hypo/Hyperkalemia, Hypothermia
+   - **T's:** Tension pneumothorax, Tamponade (cardiac), Toxins, Thrombosis (pulmonary or coronary)
+
+**Important:** Give **epinephrine 1 mg IV/IO as soon as possible** — for non-shockable rhythms, you want epi early.
+
+---
+
+**Have you been able to give the epinephrine yet?**
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+def user : ArrestState × ArrestPatient :=
+  let s₀ := (ArrestState.InitialAssessment,
+    { rhythm := none
+      pulse := none
+      shockCount := 0
+      cprCycle := 0
+      epinephrineCount := 0
+      amiodaroneOrLidocaineCount := 0
+      monitorAttached := false
+      defibrillatorAttached := false
+      vascularAccess := VascularAccess.None
+      airway := Airway.Basic
+      timers := []
+      latestEvent := none })
+  let s₁ := updateState s₀.1 s₀.2 Event.NoPulseDetected
+  let s₂ := updateState s₁.1 s₁.2 Event.CPRStarted
+  let s₃ := updateState s₂.1 s₂.2 Event.AllEquipmentAttached
+  let s₄ := updateState s₃.1 s₃.2 (Event.RhythmObserved Rhythm.Asystole)
+  let s₅ := updateState s₄.1 s₄.2 Event.EpinephrineGiven
+  s₅
+
+#eval ACLSOutput user.1 user.2
+```
+
+============================================================
+
+**Good, epinephrine is in.** Next dose will be due in **3–5 minutes** — keep track of that timer.
+
+**Right now:**
+
+1. **Continue high-quality CPR** for a full 2-minute cycle
+2. **Keep working through reversible causes** — anything you can identify and treat from the H's and T's?
+
+---
+
+**When the 2-minute CPR cycle is up, we'll re-check the rhythm. Is the CPR timer running?**
+
+============================================================
+
+Looking at the user's message: "patient is here but not breathing"
+
+The user is describing an observation about the patient — they are not breathing. However, this does not directly map to any specific Event in the protocol. Let me check:
+
+- The user has NOT explicitly said they checked a pulse (no `PulseDetected` or `NoPulseDetected`)
+- The user has NOT started CPR
+- The user has NOT attached any equipment
+- "Not breathing" is a clinical observation, but the protocol events deal with **pulse** status, not breathing status specifically
+
+The user is describing the initial presentation but hasn't reported performing any action or making a definitive pulse determination yet.
+
+**Output:**
+
+1) `[]`
+
+2) **Questions for user:** Have you checked for a pulse? Checking for a pulse and breathing simultaneously (for 5-10 seconds) is the first step to determine if this is a cardiac arrest.
+
+============================================================
+
+**Next step:** Check the patient's pulse for 5–10 seconds.
+
+Does the patient have a pulse?
+
+============================================================
+
+[Event.NoPulseDetected, Event.CPRStarted]
+
+============================================================
+
+**While CPR is in progress, do the following:**
+
+1. **Give oxygen**
+2. **Attach the monitor**
+3. **Attach the defibrillator**
+4. **Establish IV or IO access**
+
+**CPR reminders:**
+- Rate: 100–120 compressions per minute
+- Depth: at least 5 cm (2 inches)
+- Allow full chest recoil between compressions
+- Give breaths with visible chest rise
+
+Your 2-minute CPR timer is running. Let me know when you've got the equipment attached, or when the timer is up.
+
+============================================================
+
+The timer expiration for CPR is explicitly stated.
+
+1) `[Event.TimerExpired TimerKind.CPR]`
+
+2) **Questions for user:** The 2-minute CPR cycle is up. Did you get the monitor, defibrillator, and IV/IO attached? It's time to analyze the rhythm — what do you see on the monitor?
+
+============================================================
+
+**The CPR timer has expired.** You need to:
+
+1. **Give oxygen**
+2. **Attach the monitor**
+3. **Attach the defibrillator**
+4. **Establish IV or IO access**
+
+Have you been able to get any of this equipment attached yet? Once the monitor and defibrillator are on, we need to analyze the rhythm right away.
 
 ============================================================
 

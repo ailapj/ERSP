@@ -1,0 +1,984 @@
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Patient just arrived to ER, unconscious. We don't know pulse yet.
+-- Starting with InitialAssessment state per ACLS protocol.
+
+def currentPatient : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none          -- pulse not yet checked
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+}
+
+def currentState : ArrestState := ArrestState.InitialAssessment
+
+-- Get the next actions and reminders
+#eval ACLSOutput currentState currentPatient
+-- Expected output: actions = [CheckPulse], reminders = ["Check pulse and breathing for 5-10 seconds"]
+-- Since pulse is unknown, the protocol says to check pulse first.
+```
+
+============================================================
+
+Based on the verified ACLS protocol, here's what we know:
+
+## Current Situation
+
+The patient is unconscious and has just arrived. ACLS protocol has been initiated, and we are in the **Initial Assessment** phase.
+
+## Next Action
+
+**Check for a pulse** (and breathing) — this should take **5–10 seconds**.
+
+This is the critical first step. We need to determine whether the patient has a pulse before we can proceed further in the algorithm.
+
+---
+
+**Does the patient have a pulse?** And are they breathing normally? This will determine the next steps in the protocol.
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Patient arrived unconscious. Pulse checked and found absent.
+-- We apply Event.NoPulseDetected to update state.
+
+def initialPatient : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none          -- pulse not yet checked at this point
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+}
+
+def initialState : ArrestState := ArrestState.InitialAssessment
+
+-- User reports no pulse detected. Apply NoPulseDetected event.
+def afterNoPulse := updateState initialState initialPatient Event.NoPulseDetected
+-- This returns (InitialAssessment, { patient with pulse := some Pulse.Absent })
+
+def currentState : ArrestState := afterNoPulse.1
+def currentPatient : ArrestPatient := afterNoPulse.2
+
+-- Verify the state transition
+#eval currentState
+-- Expected: ArrestState.InitialAssessment
+
+#eval currentPatient.pulse
+-- Expected: some Pulse.Absent
+
+-- Get the next actions and reminders
+#eval ACLSOutput currentState currentPatient
+-- Expected output: actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+-- Since pulse is absent, the protocol says to start CPR immediately.
+```
+
+============================================================
+
+Based on the verified Lean program, here's what we know:
+
+## Patient Status
+- **Pulse:** Absent (confirmed)
+- **State:** Initial Assessment
+
+## Next Action
+
+**Start high-quality CPR immediately.**
+
+## Reminder
+- **Start CPR immediately** — this is the critical next step when no pulse is detected.
+
+---
+
+Once CPR is initiated, the next steps will involve attaching a monitor/defibrillator to identify the cardiac rhythm, which will determine the specific pathway (shockable vs. non-shockable rhythm).
+
+**Has a monitor/defibrillator been attached yet to check the rhythm?**
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Patient arrived unconscious. Pulse checked and found absent.
+-- We apply Event.NoPulseDetected to update state.
+
+def initialPatient : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none          -- pulse not yet checked at this point
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+}
+
+def initialState : ArrestState := ArrestState.InitialAssessment
+
+-- User reports no pulse detected. Apply NoPulseDetected event.
+def afterNoPulse := updateState initialState initialPatient Event.NoPulseDetected
+-- This returns (InitialAssessment, { patient with pulse := some Pulse.Absent })
+
+def state1 : ArrestState := afterNoPulse.1
+def patient1 : ArrestPatient := afterNoPulse.2
+
+-- Verify the state transition
+#eval state1
+-- Expected: ArrestState.InitialAssessment
+
+#eval patient1.pulse
+-- Expected: some Pulse.Absent
+
+-- Get the next actions and reminders
+#eval ACLSOutput state1 patient1
+-- Expected output: actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+-- Since pulse is absent, the protocol says to start CPR immediately.
+
+-- CPR has been started (implied by user proceeding). Apply CPRStarted event.
+-- From InitialAssessment, CPRStarted transitions to InitialACLS.
+def afterCPRStarted := updateState state1 patient1 Event.CPRStarted
+
+def state2 : ArrestState := afterCPRStarted.1
+def patient2 : ArrestPatient := afterCPRStarted.2
+
+#eval state2
+-- Expected: ArrestState.InitialACLS
+
+-- User reports monitor has been attached. Apply MonitorAttached event.
+def afterMonitorAttached := updateState state2 patient2 Event.MonitorAttached
+
+def state3 : ArrestState := afterMonitorAttached.1
+def patient3 : ArrestPatient := afterMonitorAttached.2
+
+#eval state3
+-- Expected: ArrestState.InitialACLS (state unchanged by equipment attachment)
+
+#eval patient3.monitorAttached
+-- Expected: true
+
+-- Get the next actions and reminders
+#eval ACLSOutput state3 patient3
+-- Expected output for InitialACLS state:
+-- actions = [GiveOxygen, AttachMonitor, AttachDefibrillator, ObtainIVIO]
+-- reminders = ["Perform CPR for 2 minutes", "Maintain compression rate 100-120/min",
+--              "Allow full chest recoil by pushing down at least 5cm (2inch)",
+--              "Give enough air for visible chest rise"]
+-- Note: Monitor is already attached, but the protocol still lists it.
+-- Still need: defibrillator and IV/IO access.
+```
+
+============================================================
+
+Based on the verified Lean program, here's the current status and what needs to happen:
+
+## Patient Status
+- **Pulse:** Absent
+- **CPR:** Started
+- **Monitor:** Attached ✅
+- **Defibrillator:** Not yet attached ❌
+- **Vascular Access (IV/IO):** Not yet obtained ❌
+- **State:** Initial ACLS
+
+## Next Actions
+1. **Give Oxygen**
+2. **Attach Defibrillator**
+3. **Obtain IV/IO access**
+
+## Reminders
+- **Perform CPR for 2 minutes**
+- **Maintain compression rate 100–120/min**
+- **Allow full chest recoil by pushing down at least 5 cm (2 inches)**
+- **Give enough air for visible chest rise**
+
+---
+
+The monitor is attached, but we still need the **defibrillator** attached to be able to deliver a shock if needed, and **IV/IO access** for medication administration.
+
+**What rhythm is showing on the monitor?** This will determine whether we follow the shockable (VF/pVT) or non-shockable (asystole/PEA) pathway.
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Patient arrived unconscious. Pulse checked and found absent.
+-- We apply Event.NoPulseDetected to update state.
+
+def initialPatient : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none          -- pulse not yet checked at this point
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+}
+
+def initialState : ArrestState := ArrestState.InitialAssessment
+
+-- User reports no pulse detected. Apply NoPulseDetected event.
+def afterNoPulse := updateState initialState initialPatient Event.NoPulseDetected
+-- This returns (InitialAssessment, { patient with pulse := some Pulse.Absent })
+
+def state1 : ArrestState := afterNoPulse.1
+def patient1 : ArrestPatient := afterNoPulse.2
+
+-- Verify the state transition
+#eval state1
+-- Expected: ArrestState.InitialAssessment
+
+#eval patient1.pulse
+-- Expected: some Pulse.Absent
+
+-- Get the next actions and reminders
+#eval ACLSOutput state1 patient1
+-- Expected output: actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+-- Since pulse is absent, the protocol says to start CPR immediately.
+
+-- CPR has been started (implied by user proceeding). Apply CPRStarted event.
+-- From InitialAssessment, CPRStarted transitions to InitialACLS.
+def afterCPRStarted := updateState state1 patient1 Event.CPRStarted
+
+def state2 : ArrestState := afterCPRStarted.1
+def patient2 : ArrestPatient := afterCPRStarted.2
+
+#eval state2
+-- Expected: ArrestState.InitialACLS
+
+-- User reports monitor has been attached. Apply MonitorAttached event.
+def afterMonitorAttached := updateState state2 patient2 Event.MonitorAttached
+
+def state3 : ArrestState := afterMonitorAttached.1
+def patient3 : ArrestPatient := afterMonitorAttached.2
+
+#eval state3
+-- Expected: ArrestState.InitialACLS (state unchanged by equipment attachment)
+
+#eval patient3.monitorAttached
+-- Expected: true
+
+-- Get the next actions and reminders
+#eval ACLSOutput state3 patient3
+-- Expected output for InitialACLS state:
+-- actions = [GiveOxygen, AttachMonitor, AttachDefibrillator, ObtainIVIO]
+-- reminders = ["Perform CPR for 2 minutes", "Maintain compression rate 100-120/min",
+--              "Allow full chest recoil by pushing down at least 5cm (2inch)",
+--              "Give enough air for visible chest rise"]
+-- Note: Monitor is already attached, but the protocol still lists it.
+-- Still need: defibrillator and IV/IO access.
+
+-- User reports defibrillator attached. Apply DefibrillatorAttached event.
+def afterDefibAttached := updateState state3 patient3 Event.DefibrillatorAttached
+
+def state4 : ArrestState := afterDefibAttached.1
+def patient4 : ArrestPatient := afterDefibAttached.2
+
+#eval state4
+-- Expected: ArrestState.InitialACLS (state unchanged by equipment attachment)
+
+#eval patient4.defibrillatorAttached
+-- Expected: true
+
+-- User reports IV/IO access established. Apply IV_IOEstablished event.
+def afterIVIO := updateState state4 patient4 Event.IV_IOEstablished
+
+def state5 : ArrestState := afterIVIO.1
+def patient5 : ArrestPatient := afterIVIO.2
+
+#eval state5
+-- Expected: ArrestState.InitialACLS (state unchanged by equipment attachment)
+
+#eval patient5.vascularAccess
+-- Expected: VascularAccess.IV_IO
+
+#eval patient5.monitorAttached
+-- Expected: true
+
+#eval patient5.defibrillatorAttached
+-- Expected: true
+
+-- Get the next actions and reminders with all equipment now attached
+#eval ACLSOutput state5 patient5
+-- Expected output for InitialACLS state:
+-- actions = [GiveOxygen, AttachMonitor, AttachDefibrillator, ObtainIVIO]
+-- reminders = ["Perform CPR for 2 minutes", "Maintain compression rate 100-120/min",
+--              "Allow full chest recoil by pushing down at least 5cm (2inch)",
+--              "Give enough air for visible chest rise"]
+-- All equipment is now attached. The protocol output still lists them
+-- but the key next step is to identify the rhythm on the monitor.
+```
+
+============================================================
+
+Based on the verified Lean program, here's the updated status:
+
+## Patient Status
+- **Pulse:** Absent
+- **CPR:** In progress
+- **Monitor:** Attached ✅
+- **Defibrillator:** Attached ✅
+- **IV/IO Access:** Established ✅
+- **State:** Initial ACLS
+
+## All Equipment Is Now Ready
+
+## Ongoing Actions
+1. **Give Oxygen**
+
+## Reminders
+- **Perform CPR for 2 minutes**
+- **Maintain compression rate 100–120/min**
+- **Allow full chest recoil by pushing down at least 5 cm (2 inches)**
+- **Give enough air for visible chest rise**
+
+---
+
+All critical equipment is in place. The key next step is to **identify the cardiac rhythm on the monitor**, which will determine the treatment pathway:
+
+- **Shockable rhythms** (VF / pulseless VT) → shock delivery pathway
+- **Non-shockable rhythms** (asystole / PEA) → medication pathway
+
+**What rhythm is showing on the monitor?**
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Patient arrived unconscious. Pulse checked and found absent.
+-- We apply Event.NoPulseDetected to update state.
+
+def initialPatient : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none          -- pulse not yet checked at this point
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+}
+
+def initialState : ArrestState := ArrestState.InitialAssessment
+
+-- User reports no pulse detected. Apply NoPulseDetected event.
+def afterNoPulse := updateState initialState initialPatient Event.NoPulseDetected
+-- This returns (InitialAssessment, { patient with pulse := some Pulse.Absent })
+
+def state1 : ArrestState := afterNoPulse.1
+def patient1 : ArrestPatient := afterNoPulse.2
+
+-- Verify the state transition
+#eval state1
+-- Expected: ArrestState.InitialAssessment
+
+#eval patient1.pulse
+-- Expected: some Pulse.Absent
+
+-- Get the next actions and reminders
+#eval ACLSOutput state1 patient1
+-- Expected output: actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+-- Since pulse is absent, the protocol says to start CPR immediately.
+
+-- CPR has been started (implied by user proceeding). Apply CPRStarted event.
+-- From InitialAssessment, CPRStarted transitions to InitialACLS.
+def afterCPRStarted := updateState state1 patient1 Event.CPRStarted
+
+def state2 : ArrestState := afterCPRStarted.1
+def patient2 : ArrestPatient := afterCPRStarted.2
+
+#eval state2
+-- Expected: ArrestState.InitialACLS
+
+-- User reports monitor has been attached. Apply MonitorAttached event.
+def afterMonitorAttached := updateState state2 patient2 Event.MonitorAttached
+
+def state3 : ArrestState := afterMonitorAttached.1
+def patient3 : ArrestPatient := afterMonitorAttached.2
+
+#eval state3
+-- Expected: ArrestState.InitialACLS (state unchanged by equipment attachment)
+
+#eval patient3.monitorAttached
+-- Expected: true
+
+-- Get the next actions and reminders
+#eval ACLSOutput state3 patient3
+-- Expected output for InitialACLS state:
+-- actions = [GiveOxygen, AttachMonitor, AttachDefibrillator, ObtainIVIO]
+-- reminders = ["Perform CPR for 2 minutes", "Maintain compression rate 100-120/min",
+--              "Allow full chest recoil by pushing down at least 5cm (2inch)",
+--              "Give enough air for visible chest rise"]
+-- Note: Monitor is already attached, but the protocol still lists it.
+-- Still need: defibrillator and IV/IO access.
+
+-- User reports defibrillator attached. Apply DefibrillatorAttached event.
+def afterDefibAttached := updateState state3 patient3 Event.DefibrillatorAttached
+
+def state4 : ArrestState := afterDefibAttached.1
+def patient4 : ArrestPatient := afterDefibAttached.2
+
+#eval state4
+-- Expected: ArrestState.InitialACLS (state unchanged by equipment attachment)
+
+#eval patient4.defibrillatorAttached
+-- Expected: true
+
+-- User reports IV/IO access established. Apply IV_IOEstablished event.
+def afterIVIO := updateState state4 patient4 Event.IV_IOEstablished
+
+def state5 : ArrestState := afterIVIO.1
+def patient5 : ArrestPatient := afterIVIO.2
+
+#eval state5
+-- Expected: ArrestState.InitialACLS (state unchanged by equipment attachment)
+
+#eval patient5.vascularAccess
+-- Expected: VascularAccess.IV_IO
+
+#eval patient5.monitorAttached
+-- Expected: true
+
+#eval patient5.defibrillatorAttached
+-- Expected: true
+
+-- Get the next actions and reminders with all equipment now attached
+#eval ACLSOutput state5 patient5
+-- Expected output for InitialACLS state:
+-- actions = [GiveOxygen, AttachMonitor, AttachDefibrillator, ObtainIVIO]
+-- reminders = ["Perform CPR for 2 minutes", "Maintain compression rate 100-120/min",
+--              "Allow full chest recoil by pushing down at least 5cm (2inch)",
+--              "Give enough air for visible chest rise"]
+-- All equipment is now attached. The protocol output still lists them
+-- but the key next step is to identify the rhythm on the monitor.
+
+-- User reports pulseless VT on the monitor. Apply RhythmObserved event.
+-- This transitions to RhythmAnalysis state with rhythm = PulselessVT.
+def afterRhythmObserved := updateState state5 patient5 (Event.RhythmObserved Rhythm.PulselessVT)
+
+def state6 : ArrestState := afterRhythmObserved.1
+def patient6 : ArrestPatient := afterRhythmObserved.2
+
+#eval state6
+-- Expected: ArrestState.RhythmAnalysis
+
+#eval patient6.rhythm
+-- Expected: some (Rhythm.PulselessVT)
+
+-- Get the next actions and reminders for RhythmAnalysis with a shockable rhythm (pulseless VT)
+#eval ACLSOutput state6 patient6
+-- Expected output for RhythmAnalysis with shockable rhythm:
+-- actions = [DeliverShock]
+-- reminders = ["Resume CPR immediately after shock"]
+-- Pulseless VT is a shockable rhythm, so the protocol says to deliver a shock.
+```
+
+============================================================
+
+Based on the verified Lean program, here's the updated status:
+
+## Patient Status
+- **Pulse:** Absent
+- **Rhythm:** Pulseless VT (shockable rhythm) ✅
+- **CPR:** In progress
+- **Monitor:** Attached ✅
+- **Defibrillator:** Attached ✅
+- **IV/IO Access:** Established ✅
+- **State:** Rhythm Analysis
+
+---
+
+## ⚡ Next Action
+
+**Deliver a shock immediately.**
+
+Pulseless VT is a **shockable rhythm**.
+
+## Reminder
+- **Resume CPR immediately after the shock**
+
+---
+
+**Has the shock been delivered?**
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Patient arrived unconscious. Pulse checked and found absent.
+-- We apply Event.NoPulseDetected to update state.
+
+def initialPatient : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none          -- pulse not yet checked at this point
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+}
+
+def initialState : ArrestState := ArrestState.InitialAssessment
+
+-- User reports no pulse detected. Apply NoPulseDetected event.
+def afterNoPulse := updateState initialState initialPatient Event.NoPulseDetected
+
+def state1 : ArrestState := afterNoPulse.1
+def patient1 : ArrestPatient := afterNoPulse.2
+
+#eval state1
+-- Expected: ArrestState.InitialAssessment
+
+#eval patient1.pulse
+-- Expected: some Pulse.Absent
+
+#eval ACLSOutput state1 patient1
+-- Expected output: actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+
+-- CPR has been started. Apply CPRStarted event.
+-- From InitialAssessment, CPRStarted transitions to InitialACLS.
+def afterCPRStarted := updateState state1 patient1 Event.CPRStarted
+
+def state2 : ArrestState := afterCPRStarted.1
+def patient2 : ArrestPatient := afterCPRStarted.2
+
+#eval state2
+-- Expected: ArrestState.InitialACLS
+
+-- User reports monitor has been attached. Apply MonitorAttached event.
+def afterMonitorAttached := updateState state2 patient2 Event.MonitorAttached
+
+def state3 : ArrestState := afterMonitorAttached.1
+def patient3 : ArrestPatient := afterMonitorAttached.2
+
+#eval state3
+-- Expected: ArrestState.InitialACLS
+
+#eval patient3.monitorAttached
+-- Expected: true
+
+#eval ACLSOutput state3 patient3
+
+-- User reports defibrillator attached. Apply DefibrillatorAttached event.
+def afterDefibAttached := updateState state3 patient3 Event.DefibrillatorAttached
+
+def state4 : ArrestState := afterDefibAttached.1
+def patient4 : ArrestPatient := afterDefibAttached.2
+
+#eval state4
+-- Expected: ArrestState.InitialACLS
+
+#eval patient4.defibrillatorAttached
+-- Expected: true
+
+-- User reports IV/IO access established. Apply IV_IOEstablished event.
+def afterIVIO := updateState state4 patient4 Event.IV_IOEstablished
+
+def state5 : ArrestState := afterIVIO.1
+def patient5 : ArrestPatient := afterIVIO.2
+
+#eval state5
+-- Expected: ArrestState.InitialACLS
+
+#eval patient5.vascularAccess
+-- Expected: VascularAccess.IV_IO
+
+#eval patient5.monitorAttached
+-- Expected: true
+
+#eval patient5.defibrillatorAttached
+-- Expected: true
+
+#eval ACLSOutput state5 patient5
+
+-- User reports pulseless VT on the monitor. Apply RhythmObserved event.
+def afterRhythmObserved := updateState state5 patient5 (Event.RhythmObserved Rhythm.PulselessVT)
+
+def state6 : ArrestState := afterRhythmObserved.1
+def patient6 : ArrestPatient := afterRhythmObserved.2
+
+#eval state6
+-- Expected: ArrestState.RhythmAnalysis
+
+#eval patient6.rhythm
+-- Expected: some (Rhythm.PulselessVT)
+
+#eval ACLSOutput state6 patient6
+-- Expected: actions = [DeliverShock], reminders = ["Resume CPR immediately after shock"]
+
+-- User reports shock has been delivered. Apply ShockDelivered event.
+-- ShockDelivered transitions to CPR state and increments shockCount.
+def afterShockDelivered := updateState state6 patient6 Event.ShockDelivered
+
+def state7 : ArrestState := afterShockDelivered.1
+def patient7 : ArrestPatient := afterShockDelivered.2
+
+#eval state7
+-- Expected: ArrestState.CPR
+
+#eval patient7.shockCount
+-- Expected: 1
+
+-- User reports patient is moving and responding to pain after the shock.
+-- This indicates signs of life / return of spontaneous circulation (ROSC).
+-- We should check for a pulse. The patient responding to pain suggests pulse may be present.
+-- Apply PulseDetected event since the patient is moving and responding.
+def afterPulseDetected := updateState state7 patient7 Event.PulseDetected
+
+def state8 : ArrestState := afterPulseDetected.1
+def patient8 : ArrestPatient := afterPulseDetected.2
+
+#eval state8
+-- Expected: ArrestState.ROSC
+
+#eval patient8.pulse
+-- Expected: some Pulse.Present
+
+-- Get the next actions and reminders for ROSC
+#eval ACLSOutput state8 patient8
+-- Expected output for ROSC:
+-- actions = []
+-- reminders = ["Begin post-cardiac arrest care"]
+-- Patient has achieved ROSC. Begin post-cardiac arrest care.
+```
+
+============================================================
+
+Based on the verified Lean program, here's the updated status:
+
+## 🎉 Return of Spontaneous Circulation (ROSC) Achieved!
+
+The patient is moving and responding to pain, which indicates signs of life. A pulse check confirms:
+
+- **Pulse:** Present ✅
+- **State:** ROSC (Return of Spontaneous Circulation)
+- **Shocks Delivered:** 1
+
+---
+
+## Next Step
+
+**Begin post-cardiac arrest care.**
+
+---
+
+The patient has transitioned out of cardiac arrest. The ACLS cardiac arrest algorithm has reached its endpoint with successful ROSC.
+
+**Assumption:** I am assuming that because the patient is moving and responding to pain, a pulse has been confirmed present. If a pulse has **not** been formally checked yet, please do so now — it should take 5–10 seconds. Can you confirm the patient has a palpable pulse?
+
+============================================================
+
+
+
+```lean
+import Tutorial.Lean.ACLS
+
+-- Patient arrived unconscious. Pulse checked and found absent.
+-- We apply Event.NoPulseDetected to update state.
+
+def initialPatient : ArrestPatient :=
+{
+  rhythm := none
+  pulse := none          -- pulse not yet checked at this point
+
+  shockCount := 0
+  cprCycle := 0
+
+  epinephrineCount := 0
+  amiodaroneOrLidocaineCount := 0
+
+  monitorAttached := false
+  defibrillatorAttached := false
+
+  vascularAccess := VascularAccess.None
+
+  airway := Airway.Basic
+
+  timers :=
+  {
+    cpr := none
+    epinephrine := none
+    antiarrhythmic := none
+  }
+}
+
+def initialState : ArrestState := ArrestState.InitialAssessment
+
+-- User reports no pulse detected. Apply NoPulseDetected event.
+def afterNoPulse := updateState initialState initialPatient Event.NoPulseDetected
+
+def state1 : ArrestState := afterNoPulse.1
+def patient1 : ArrestPatient := afterNoPulse.2
+
+#eval state1
+-- Expected: ArrestState.InitialAssessment
+
+#eval patient1.pulse
+-- Expected: some Pulse.Absent
+
+#eval ACLSOutput state1 patient1
+-- Expected output: actions = [StartHighQualityCPR], reminders = ["Start CPR immedietly"]
+
+-- CPR has been started. Apply CPRStarted event.
+-- From InitialAssessment, CPRStarted transitions to InitialACLS.
+def afterCPRStarted := updateState state1 patient1 Event.CPRStarted
+
+def state2 : ArrestState := afterCPRStarted.1
+def patient2 : ArrestPatient := afterCPRStarted.2
+
+#eval state2
+-- Expected: ArrestState.InitialACLS
+
+-- User reports monitor has been attached. Apply MonitorAttached event.
+def afterMonitorAttached := updateState state2 patient2 Event.MonitorAttached
+
+def state3 : ArrestState := afterMonitorAttached.1
+def patient3 : ArrestPatient := afterMonitorAttached.2
+
+#eval state3
+-- Expected: ArrestState.InitialACLS
+
+#eval patient3.monitorAttached
+-- Expected: true
+
+#eval ACLSOutput state3 patient3
+
+-- User reports defibrillator attached. Apply DefibrillatorAttached event.
+def afterDefibAttached := updateState state3 patient3 Event.DefibrillatorAttached
+
+def state4 : ArrestState := afterDefibAttached.1
+def patient4 : ArrestPatient := afterDefibAttached.2
+
+#eval state4
+-- Expected: ArrestState.InitialACLS
+
+#eval patient4.defibrillatorAttached
+-- Expected: true
+
+-- User reports IV/IO access established. Apply IV_IOEstablished event.
+def afterIVIO := updateState state4 patient4 Event.IV_IOEstablished
+
+def state5 : ArrestState := afterIVIO.1
+def patient5 : ArrestPatient := afterIVIO.2
+
+#eval state5
+-- Expected: ArrestState.InitialACLS
+
+#eval patient5.vascularAccess
+-- Expected: VascularAccess.IV_IO
+
+#eval patient5.monitorAttached
+-- Expected: true
+
+#eval patient5.defibrillatorAttached
+-- Expected: true
+
+#eval ACLSOutput state5 patient5
+
+-- User reports pulseless VT on the monitor. Apply RhythmObserved event.
+def afterRhythmObserved := updateState state5 patient5 (Event.RhythmObserved Rhythm.PulselessVT)
+
+def state6 : ArrestState := afterRhythmObserved.1
+def patient6 : ArrestPatient := afterRhythmObserved.2
+
+#eval state6
+-- Expected: ArrestState.RhythmAnalysis
+
+#eval patient6.rhythm
+-- Expected: some (Rhythm.PulselessVT)
+
+#eval ACLSOutput state6 patient6
+-- Expected: actions = [DeliverShock], reminders = ["Resume CPR immediately after shock"]
+
+-- User reports shock has been delivered. Apply ShockDelivered event.
+-- ShockDelivered transitions to CPR state and increments shockCount.
+def afterShockDelivered := updateState state6 patient6 Event.ShockDelivered
+
+def state7 : ArrestState := afterShockDelivered.1
+def patient7 : ArrestPatient := afterShockDelivered.2
+
+#eval state7
+-- Expected: ArrestState.CPR
+
+#eval patient7.shockCount
+-- Expected: 1
+
+-- User reports patient is moving and responding to pain after the shock.
+-- This indicates signs of life / return of spontaneous circulation (ROSC).
+-- We should check for a pulse. The patient responding to pain suggests pulse may be present.
+-- Apply PulseDetected event since the patient is moving and responding.
+def afterPulseDetected := updateState state7 patient7 Event.PulseDetected
+
+def state8 : ArrestState := afterPulseDetected.1
+def patient8 : ArrestPatient := afterPulseDetected.2
+
+#eval state8
+-- Expected: ArrestState.ROSC
+
+#eval patient8.pulse
+-- Expected: some Pulse.Present
+
+-- Get the next actions and reminders for ROSC
+#eval ACLSOutput state8 patient8
+-- Expected output for ROSC:
+-- actions = []
+-- reminders = ["Begin post-cardiac arrest care"]
+
+-- User confirms the patient has a palpable pulse.
+-- Pulse was already recorded as Present in state8. No new event needed.
+-- The patient remains in ROSC state. Post-cardiac arrest care should begin.
+
+-- Confirm final state after user confirms pulse is present.
+-- No state change needed — pulse was already detected and ROSC achieved.
+
+#eval state8
+-- Expected: ArrestState.ROSC
+
+#eval patient8.pulse
+-- Expected: some Pulse.Present
+
+-- The ACLS cardiac arrest algorithm has concluded successfully with ROSC.
+-- Next step: Begin post-cardiac arrest care.
+#eval ACLSOutput state8 patient8
+-- Expected output:
+-- actions = []
+-- reminders = ["Begin post-cardiac arrest care"]
+```
+
+============================================================
+
+Based on the verified Lean program, here's the confirmed final status:
+
+## ✅ ROSC Confirmed
+
+- **Pulse:** Present ✅
+- **State:** ROSC (Return of Spontaneous Circulation) ✅
+- **Shocks Delivered:** 1
+
+---
+
+## Current Output
+
+- **Actions:** None (the cardiac arrest algorithm has concluded)
+- **Reminder:** **"Begin post-cardiac arrest care"**
+
+---
+
+The ACLS cardiac arrest algorithm has concluded successfully. The patient has achieved ROSC with a confirmed palpable pulse. The next step is to **begin post-cardiac arrest care**.
+
+============================================================
+

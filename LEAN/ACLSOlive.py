@@ -3,32 +3,58 @@ import os
 import re
 from dotenv import load_dotenv
 from anthropic import Anthropic
+import threading 
 
 load_dotenv()
 load_dotenv(override=True)
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 
+IMPORT_LINE = "import Tutorial.Lean.ACLS"
 CANDIDATE_PATH = "candidate.lean"
-REFERENCE_PATH = "Tutorial/Lean/moduleOneRevised.lean"
+REFERENCE_PATH = "Tutorial/Lean/ACLS.lean"
 with open(REFERENCE_PATH, "r", encoding="utf-8") as reference_spec:
             REFERENCE_SPEC = reference_spec.read()
-IMPORT_LINE = "import Tutorial.Lean.moduleOneRevised"
-SYSTEM_PROMPT = f"""
-You are a Lean theorem prover.
-
-The following Lean specification is immutable.
-You may only use definitions from this specification.
-Any symptom that is identified or ruled out should be supported by the user prompt. 
-
-{REFERENCE_SPEC}
-
-RULES:
-- Do not modify imports.
-- Do not change theorem statements.
-"""
+with open(CANDIDATE_PATH, "r", encoding="utf-8") as candidate_plan:
+            CANDIDATE_PLAN = candidate_plan.read()
 
 
+# Timer manager
+class TimerManager:
+    def __init__(self):
+        self.active = {}
+
+    def start(self, name, seconds):
+        # Don't start another timer if one is already running
+        if name in self.active:
+            return
+
+        def expired():
+            print(f"\n[TIMER] {name} expired!")
+
+            # remove timer from active list
+            self.active.pop(name, None)
+
+        timer = threading.Timer(seconds, expired)
+
+        self.active[name] = timer
+        timer.start()
+
+        print(f"[TIMER] Started {name} ({seconds} seconds)")
+
+timers = TimerManager()
+
+class ConversationState:
+    def __init__(self):
+        self.history = []          # natural language dialogue
+        self.current_lean = CANDIDATE_PLAN # latest verified Lean program
+        # self.turn = 0, possibly uncomment if different behaivor is needed for longer convos. 
+
+def add_message(state, message, role):
+    state.history.append({
+        "role": role, 
+        "content": message
+    })
 # Calling Claude with the prompt 
 def call_claude(prompt, max_new_tokens=4000, temperature=0.7):
     message = client.messages.create(
@@ -39,7 +65,7 @@ def call_claude(prompt, max_new_tokens=4000, temperature=0.7):
         system=[
             {
                 "type":"text",
-                "text": SYSTEM_PROMPT,
+                "text" : REFERENCE_SPEC, 
                 "cache_control" : {"type": "ephemeral"}, 
             }
         ], 
@@ -50,8 +76,6 @@ def call_claude(prompt, max_new_tokens=4000, temperature=0.7):
     # writing the claude outputs in log.txt to keep track
     with open("ai_log.txt", "a", encoding="utf-8") as f:
         f.write(message.content[0].text + "\n\n" + "="*60 + "\n\n")
-    # temp statement to see if caching is active 
-    print(message.usage) 
     return message.content[0].text
 
 # Extract only the lean code from the generated response  
@@ -111,6 +135,37 @@ def run_lean(lean_file):
     )
     return result.returncode, result.stdout, result.stderr
 
+# # determining what the latest event was to trigger timer if appropriate
+# def timer_trigger():
+#     eval_file = "candidate_eval.lean"
+
+#     with open(CANDIDATE_PATH, "r", encoding="utf-8") as f:
+#         candidate_code = f.read()
+
+#     eval_code = candidate_code + """
+# #eval user.timers
+# """
+
+#     with open(eval_file, "w", encoding="utf-8") as f:
+#         f.write(eval_code)
+
+#     returncode, stdout, stderr = run_lean(eval_file)
+
+#     if returncode != 0:
+#         print("Lean evaluation failed:")
+#         print(stderr)
+#         return None
+
+#     matches = re.findall(
+#         r"duration\s*:=\s*(\d+)\s*,\s*type\s*:=\s*TimerKind\.(\w+)",
+#         stdout,
+#     )
+
+#     for duration, timer_name in matches:
+#         duration = int(duration)
+#         timers.start(timer_name, duration)
+
+#     return stdout
 
 # Helper function that implements a loop to repair errors and get a safe plan. 
 # Also ensures that the plan is not trivially true or too simple 
@@ -120,7 +175,6 @@ def repair_loop(max_attempts=5):
         prompt = ""
         # Run the Lean code to capture the diagnostics and return values 
         returncode, stdout, stderr = run_lean(CANDIDATE_PATH)
-        print(stdout)
 
         with open(CANDIDATE_PATH, "r", encoding="utf-8") as f:
             candidate_code = f.read()
@@ -128,7 +182,8 @@ def repair_loop(max_attempts=5):
         if not sound_proof(candidate_code) : 
             prompt += "The proof was rejected because it contains an incomplete proof placeholder.\n"
         elif returncode == 0 : 
-            print("SAFE and SOUND: No violating instance exists.")
+            # capture the output 
+            print("SAFE and SOUND: No violating instance exists. Exiting repair loop")
             return True
 
         prompt += f"""
@@ -142,6 +197,7 @@ Modify the candidate plan so that the proof of its safety is provable. Then prov
 RULES:
 - Only use variables, signatures, and fields already defined in the file below. Do NOT invent new names.
 - Do not use trivially correct proofs (e.g. 'sorry') 
+- Only use 'eval' and 'theorem'. do NOT use 'def'. 
 
 Reference spec: 
 The Lean specification has already been provided in the system prompt.
@@ -162,73 +218,104 @@ Lean stderr output:
 
 
 # The first generation step where we prompt the LLM to generate a plan from scratch based on the user prompt. 
-def generate_plan(user_prompt):
-    with open(CANDIDATE_PATH, "r", encoding="utf-8") as f:
-            candidate_code = f.read()
+def generate_plan(state):
 
+    conversation = "\n".join(
+        f"{m['role']}: {m['content']}"
+        for m in state.history
+    )
     prompt = f"""
-You have been given a medical scenario: {user_prompt}
+conversation so far: 
+{conversation}
 
-GOAL: 
-produce the correct answer in Lean and prove its correctness. 
+lean specficiation: 
+{REFERENCE_SPEC}
 
-The Lean specification has already been provided in the system prompt (will NOT be modified)
+Previously verified Lean state:
+{state.current_lean}
 
 RULES: 
-- Use ONLY variables, signatures, and fields already defined in the file below
-- Do NOT invent new names
-
-WHAT YOU WILL BE MODIFYING (you will define the plan and prove it): 
-{candidate_code} 
+- The above Lean specification is immutable and encodes the official procedure to be followed.
+- You may only use definitions from this specification.
+- For every patient field you fill, there must be clear indication of it from the user. 
+- Preserve every previously verified fact unless the user's new information explicitly contradicts it.
+- Output ONLY Lean code enclosed in a ```lean``` block. 
 """
 
-    return call_claude(prompt, temperature=0.7)
+    return call_claude(prompt, temperature=0)
 
 
 # The full pipeline of generating the initial plan, repairing syntax errors , then repairing logic errors if the generated plan is not safe
-def generate_and_verify(user_prompt, rounds=1):
-    for i in range(rounds):
+def generate_and_verify(state):
+    for i in range(1):
         print(f"\n == Pipleline round {i+1} ==")
 
         # generate plan
-        generated_response = generate_plan(user_prompt)
+        generated_response = generate_plan(state)
         save_file(generated_response, CANDIDATE_PATH) 
 
         # logic phase
         if repair_loop():
-            print("SAFE PLAN VERIFIED")
             with open(CANDIDATE_PATH, "r", encoding="utf-8") as f:
-                candidate_code = f.read()
-            print(natural_language(user_prompt, candidate_code))
+                state.current_lean = f.read()
             return True
 
-    print("Failed to produce safe plan")
     return False
 
-def natural_language(user_prompt, candidate_code):
+def natural_language(state):
+    conversation = "\n".join(
+        f"{m['role']}: {m['content']}"
+        for m in state.history
+    )
+
+    _, stdout, stderr = run_lean(CANDIDATE_PATH)
+
     prompt = f"""
-Translate the verified response from Lean to natural language. Be sure to address the initial question of the user. 
-If more information was needed for diagnosis, ask an appropriate question that will guide the decision making process.
-Use only information supported by the reference procedure and the verified Lean plan.
+Conversation 
+{conversation}
 
-user prompt: 
-{user_prompt}
+Verified Lean Program 
+{state.current_lean}
 
-Reference medical procedure
-The Lean specification has already been provided in the system prompt.
+Here is the stdout and stderr of the lean program: 
+{stdout}, {stderr}
 
-verified LLM plan:
-{candidate_code}
+Simply translate these to natural human language. 
 
+If needed, ask a clarifying follow-up question that either leads the conversation forward, will most reduce the any uncertainity about patient's status or user inquiry, or allows the user to make corrections. 
  """
+    
     return call_claude(prompt, temperature=0.7)
+
+def chat():
+    state = ConversationState()
+
+    while True:
+
+        user = input("\nUser: ")
+
+        if user.lower() in {"quit", "exit"}:
+            break
+
+        add_message(state, user, "user")
+
+        success = generate_and_verify(state)
+
+        if not success:
+            print("Failed to produce safe plan")
+            continue
+
+        reply = natural_language(state)
+
+        add_message(state, reply, "assistant")
+
+        print("\nAssistant:")
+        print(reply)
+    print (state.history)
 # ------------------ Main ------------------
 def main():
-
-    prompt = input("Enter your medical scenario to be triaged:\n> ")
-    generate_and_verify(prompt)
-
-
+    print("Enter scenario:\n> ")
+    chat()
 
 if __name__ == "__main__":
     main()
