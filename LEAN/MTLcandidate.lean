@@ -19,28 +19,9 @@ def initialPatient : ArrestPatient := {
 def initialState := ArrestState.InitialAssessment
 
 -- this is the list of TimedEvents that have occured
-def events : List TimedEvent := [
-    {
-      timestamp := 0,
-      event := Event.NoPulseDetected
-    },
-    {
-      timestamp := 0,
-      event := Event.CPRStarted
-    },
-    {
-      timestamp := 120,
-      event := Event.TimerExpired TimerKind.CPR
-    },
-    {
-      timestamp := 120,
-      event := Event.CPRDone
-    },
-    { timestamp := 130,
-      event := Event.EpinephrineGiven
-    },
-    {timestamp := 200,
-      event := Event.ShockDelivered}
+def events : List Event := [
+    Event.CPRStarted,
+    Event.AirwayPlaced
 ]
 
 -- example of a trace, which is simply a list of TimedEvents, and the arbitary Trace.state type is initialized to Events
@@ -54,14 +35,9 @@ def exTrace : Trace Event :=
 def final :=
   events.foldl
     (fun (sp : ArrestState × ArrestPatient) te =>
-      updateState sp.1 sp.2 te.event)
+      updateState sp.1 sp.2 te)
     (initialState, initialPatient)
 
-def epiResult :=
-  events.foldl
-    (fun monitor te =>
-      updateEpiMonitor monitor te)
-    initialMonitor
 
 
 #eval final

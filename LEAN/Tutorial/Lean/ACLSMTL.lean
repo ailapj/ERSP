@@ -153,11 +153,6 @@ inductive Event
 | PostCPRDone
 deriving DecidableEq, Repr
 
-structure TimedEvent where
-  timestamp : Nat
-  event : Event
-deriving DecidableEq, Repr
-
 -- possible actions the professional can take
 inductive Action where
   | StartHighQualityCPR
@@ -438,67 +433,6 @@ def updateState
     (state, { patient with latestEvent := some Event.EpinephrineTimerStarted})
   | .AmidaroneLidocaineTimerStarted =>
     (state, { patient with latestEvent := some Event.AmidaroneLidocaineTimerStarted})
-
-
-inductive MonitorStatus
-| ok
-| waiting
-| violated
-deriving Repr, DecidableEq
-
-
-structure EpiMonitor where
-  lastEpiTime : Option Nat
-  status : MonitorStatus
-deriving Repr
-
-def initialMonitor : EpiMonitor :=
-{
-  lastEpiTime := none,
-  status := .ok
-}
-
-def updateEpiMonitor
-  (m : EpiMonitor)
-  (e : TimedEvent)
-  : EpiMonitor :=
-match e.event with
-
-| Event.EpinephrineGiven =>
-
-    match m.lastEpiTime with
-
-    | none =>
-        -- first dose starts the clock
-        {
-          lastEpiTime := some e.timestamp,
-          status := .waiting
-        }
-
-    | some previous =>
-
-        let elapsed := e.timestamp - previous
-
-        if elapsed < 180 then
-          {
-            lastEpiTime := some e.timestamp,
-            status := .violated
-          }
-
-        else if elapsed <= 300 then
-          {
-            lastEpiTime := some e.timestamp,
-            status := .waiting
-          }
-
-        else
-          {
-            lastEpiTime := some e.timestamp,
-            status := .violated
-          }
-
-| _ =>
-    m
 
 -- ========================
 -- the code below is an attempt to code ACLS rules using MTL as defined in LeanMTL.lean
