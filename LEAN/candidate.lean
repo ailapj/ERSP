@@ -20,7 +20,8 @@ def initialState := ArrestState.InitialAssessment
 def events : List Event := [
     Event.NoPulseDetected,
     Event.CPRStarted,
-    Event.TimerExpired TimerKind.CPR
+    Event.TimerExpired TimerKind.CPR,
+    Event.CPRDone
 ]
 
 

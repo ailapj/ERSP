@@ -569,3 +569,71 @@ Have you been able to get any of this equipment attached yet? Once the monitor a
 
 ============================================================
 
+[]
+
+**Questions for user:** The monitor, defibrillator, and IV/IO access still need to be set up. Have any of these been attached or established? Also, what rhythm are you seeing on the monitor?
+
+============================================================
+
+**Check the patient's pulse and breathing for 5–10 seconds.**
+
+Since you've mentioned there's no pulse, I'll record that. Does the patient have any breathing or signs of life, and is anyone currently performing CPR?
+
+============================================================
+
+[Event.NoPulseDetected]
+
+============================================================
+
+[Event.NoPulseDetected]
+
+============================================================
+
+**No pulse detected.** Start **high-quality CPR immediately.**
+
+- Push hard and fast: at least 5 cm (2 inches) deep, rate of 100–120 compressions per minute.
+- Allow full chest recoil between compressions.
+
+**What equipment do you have available?** Specifically — do you have a defibrillator, monitor, and IV/IO access, or are those still being set up?
+
+============================================================
+
+[Event.CPRStarted]
+
+============================================================
+
+**CPR is in progress — good.** While compressions continue, get these done simultaneously:
+
+1. **Give oxygen** — bag-valve mask with high-flow O₂
+2. **Attach a monitor** to the patient
+3. **Attach a defibrillator**
+4. **Establish IV or IO access**
+
+⏱️ **CPR timer running — 2 minutes.**
+
+Keep compressions at that 110/min rate, allow full chest recoil, and give breaths with visible chest rise.
+
+**Are any of these already set up, or is the team working on all four right now?**
+
+============================================================
+
+The user's latest message is the timer expiration notification: "TIMER: CPR for 120 seconds expired."
+
+This explicitly indicates the CPR timer has expired.
+
+**Output:**
+
+1) `[Event.TimerExpired TimerKind.CPR, Event.CPRDone]`
+
+2) **Questions for user:** The 2-minute CPR cycle is complete. **What rhythm do you see on the monitor?** (e.g., V-fib, V-tach, asystole, PEA — or is the monitor not yet attached?)
+
+============================================================
+
+**CPR cycle complete.** 
+
+**Analyze the rhythm now** — look at the monitor. 
+
+**What rhythm do you see?** Is it V-fib, V-tach, asystole, or PEA?
+
+============================================================
+

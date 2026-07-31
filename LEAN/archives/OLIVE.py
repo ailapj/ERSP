@@ -10,13 +10,11 @@ client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 
 CANDIDATE_PATH = "candidate.lean"
-REFERENCE_PATH = "Tutorial/Lean/moduleTwo.lean"
+REFERENCE_PATH = "Tutorial/Lean/moduleOneRevised.lean"
 with open(REFERENCE_PATH, "r", encoding="utf-8") as reference_spec:
             REFERENCE_SPEC = reference_spec.read()
-with open(CANDIDATE_PATH, "r", encoding="utf-8") as candidate_plan:
-            CANDIDATE_PLAN = candidate_plan.read()
-IMPORT_LINE = "import Tutorial.Lean.moduleTwo"
-LEAN_PROMPT = f"""
+IMPORT_LINE = "import Tutorial.Lean.moduleOneRevised"
+SYSTEM_PROMPT = f"""
 You are a Lean theorem prover.
 
 The following Lean specification is immutable.
@@ -24,36 +22,15 @@ You may only use definitions from this specification.
 Any symptom that is identified or ruled out should be supported by the user prompt. 
 
 {REFERENCE_SPEC}
+
+RULES:
+- Do not modify imports.
+- Do not change theorem statements.
 """
 
-NL_PROMPT = """
-You are a medical triage assistant.
 
-You may ONLY explain conclusions supported by the verified Lean program.
-
-If the Lean state proves enough and clear information exists to make a triage decision, provide it.  
-
-Otherwise, in order to ensure your understanding of the patient, ask a clarifying follow-up question that either leads the 
-conversation forward, will most reduce the remaining uncertainity, or allows the user to make corrections. Clearly state any assumptions you are making. 
-
-Never invent medical facts. Use only facts represented in the verifided Lean program
-
-Do not make up treatment options.
-"""
-
-class ConversationState:
-    def __init__(self):
-        self.history = []          # natural language dialogue
-        self.current_lean = CANDIDATE_PLAN # latest verified Lean program
-        # self.turn = 0, possibly uncomment if different behaivor is needed for longer convos. 
-
-def add_message(state, message, role):
-    state.history.append({
-        "role": role, 
-        "content": message
-    })
 # Calling Claude with the prompt 
-def call_claude(prompt, max_new_tokens=4000, temperature=0.7, system_prompt=LEAN_PROMPT):
+def call_claude(prompt, max_new_tokens=4000, temperature=0.7):
     message = client.messages.create(
         model="claude-opus-4-6",
         max_tokens=max_new_tokens, # how long the response can be (one token is roughly 4 characters, so 200 tokens is about 800 characters)
@@ -62,7 +39,7 @@ def call_claude(prompt, max_new_tokens=4000, temperature=0.7, system_prompt=LEAN
         system=[
             {
                 "type":"text",
-                "text": system_prompt,
+                "text": SYSTEM_PROMPT,
                 "cache_control" : {"type": "ephemeral"}, 
             }
         ], 
@@ -73,6 +50,8 @@ def call_claude(prompt, max_new_tokens=4000, temperature=0.7, system_prompt=LEAN
     # writing the claude outputs in log.txt to keep track
     with open("ai_log.txt", "a", encoding="utf-8") as f:
         f.write(message.content[0].text + "\n\n" + "="*60 + "\n\n")
+    # temp statement to see if caching is active 
+    print(message.usage) 
     return message.content[0].text
 
 # Extract only the lean code from the generated response  
@@ -183,101 +162,71 @@ Lean stderr output:
 
 
 # The first generation step where we prompt the LLM to generate a plan from scratch based on the user prompt. 
-def generate_plan(state):
+def generate_plan(user_prompt):
+    with open(CANDIDATE_PATH, "r", encoding="utf-8") as f:
+            candidate_code = f.read()
 
-    conversation = "\n".join(
-        f"{m['role']}: {m['content']}"
-        for m in state.history
-    )
     prompt = f"""
-conversation so far: 
-{conversation}
+You have been given a medical scenario: {user_prompt}
 
-The Lean specification has already been provided in the system prompt.
+GOAL: 
+produce the correct answer in Lean and prove its correctness. 
 
-Previously verified Lean state:
-{state.current_lean}
+The Lean specification has already been provided in the system prompt (will NOT be modified)
 
-TASK
-Update the Lean program to incorprate any new facts the user has provided. 
+RULES: 
+- Use ONLY variables, signatures, and fields already defined in the file below
+- Do NOT invent new names
 
-For every patient field you fill, there must be clear indication of it from the user. 
-
-If no previous Lean state existis, construct one from scratch.
-
-Preserve every previously verified fact unless the user's new
-information explicitly contradicts it.
-
-Output ONLY Lean code enclosed in a ```lean``` block. 
+WHAT YOU WILL BE MODIFYING (you will define the plan and prove it): 
+{candidate_code} 
 """
 
-    return call_claude(prompt, temperature=0)
+    return call_claude(prompt, temperature=0.7)
 
 
 # The full pipeline of generating the initial plan, repairing syntax errors , then repairing logic errors if the generated plan is not safe
-def generate_and_verify(state):
-    for i in range(1):
+def generate_and_verify(user_prompt, rounds=1):
+    for i in range(rounds):
         print(f"\n == Pipleline round {i+1} ==")
 
         # generate plan
-        generated_response = generate_plan(state)
+        generated_response = generate_plan(user_prompt)
         save_file(generated_response, CANDIDATE_PATH) 
 
         # logic phase
         if repair_loop():
             print("SAFE PLAN VERIFIED")
             with open(CANDIDATE_PATH, "r", encoding="utf-8") as f:
-                state.current_lean = f.read()
+                candidate_code = f.read()
+            print(natural_language(user_prompt, candidate_code))
             return True
 
     print("Failed to produce safe plan")
     return False
 
-def natural_language(state):
-    conversation = "\n".join(
-        f"{m['role']}: {m['content']}"
-        for m in state.history
-    )
-
+def natural_language(user_prompt, candidate_code):
     prompt = f"""
-Conversation 
-{conversation}
+Translate the verified response from Lean to natural language. Be sure to address the initial question of the user. 
+If more information was needed for diagnosis, ask an appropriate question that will guide the decision making process.
+Use only information supported by the reference procedure and the verified Lean plan.
 
-Verified Lean Program 
-{state.current_lean}
+user prompt: 
+{user_prompt}
+
+Reference medical procedure
+The Lean specification has already been provided in the system prompt.
+
+verified LLM plan:
+{candidate_code}
+
  """
-    
-    return call_claude(prompt, temperature=0.7, system_prompt=NL_PROMPT)
-
-def chat():
-    state = ConversationState()
-
-    while True:
-
-        user = input("\nUser: ")
-
-        if user.lower() in {"quit", "exit"}:
-            break
-
-        add_message(state, user, "user")
-
-        success = generate_and_verify(state)
-
-        if not success:
-            print("Unable to verify response.")
-            continue
-
-        reply = natural_language(state)
-
-        add_message(state, reply, "assistant")
-
-        print("\nAssistant:")
-        print(reply)
-    print (state.history)
+    return call_claude(prompt, temperature=0.7)
 # ------------------ Main ------------------
 def main():
-    print("Enter your medical scenario to be triaged:\n> ")
-    chat()
+
+    prompt = input("Enter your medical scenario to be triaged:\n> ")
+    generate_and_verify(prompt)
 
 
 
