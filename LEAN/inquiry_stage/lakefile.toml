@@ -1,0 +1,7 @@
+name = "tptl_stage"
+version = "0.1.0"
+defaultTargets = ["Stage"]
+
+[[lean_lib]]
+name = "Stage"
+roots = ["Vocab", "YOriginal", "YPrime", "Equivalence"]
